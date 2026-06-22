@@ -25,7 +25,8 @@ body{
 
 .container{
     width:90%;
-    height:90%;
+    max-width:1300px;
+    min-height:600px;
     display:flex;
     border-radius:20px;
     overflow:hidden;
@@ -35,18 +36,19 @@ body{
 /* 왼쪽 */
 .left-panel{
     flex:1.2;
-    background:#172540;
+    background:#141d2e;
     color:white;
-    padding:80px 50px 80px 50px;
+    padding:85px 50px 85px 70px;
 }
 
 .logo{
     text-align:center;
-    margin-bottom:70px;
+    margin-bottom:50px;
+    margin-left:-23px;
 }
 
 .logo h1{
-    font-size:48px;
+    font-size:35px;
     letter-spacing:2px;
 }
 
@@ -60,35 +62,43 @@ body{
 
 .logo p{
     color:#aab3c5;
+    font-size:17px;
+    font-weight:400;
     line-height:1.8;
 }
 
 .feature{
     display:flex;
-    margin-bottom:35px;
+    margin-bottom:25px;
     align-items:flex-start;
 }
 
 .icon-box{
-    width:45px;
-    height:45px;
-    background:#172540;
+    width:50px;
+    height:50px;
+    background:rgba(18, 47, 105, 0.479);
     border-radius:12px;
+
     display:flex;
     justify-content:center;
     align-items:center;
-    color:#2d7dff;
-    margin-right:18px;
+
+    color:#4d93ff;
+    margin-right:16px;
+
 }
 
+.icon-box i{
+    font-size:20px;
+}
 .feature h3{
     font-size:18px;
-    margin-bottom:5px;
+    margin-bottom:0.5px;
 }
 
 .feature p{
     color:#9ea8bb;
-    font-size:14px;
+    font-size:15px;
 }
 
 /* 오른쪽 */
@@ -101,13 +111,13 @@ body{
 }
 
 .login-box{
-    width:380px;
+    width:450px;
 }
 
 .login-box h2{
-    font-size:42px;
-    color:#111827;
-    margin-bottom:10px;
+    font-size:28px;
+    color:#141d2e;
+    margin-bottom:8px;
 }
 
 .login-box .sub{
@@ -116,9 +126,10 @@ body{
 }
 
 .label{
-    font-size:14px;
+    color: #3b3f46;
+    font-size:15px;
     font-weight:600;
-    margin-bottom:8px;
+    margin-bottom:5px;
     display:block;
 }
 
@@ -167,7 +178,7 @@ body{
 .login-btn{
     width:100%;
     height:58px;
-    background:#172540;
+    background:#141d2e;
     border:none;
     color:white;
     font-size:18px;
@@ -178,7 +189,7 @@ body{
 }
 
 .login-btn:hover{
-    background:#172540;
+    background:#141d2e;
 }
 
 .signup{
@@ -226,7 +237,7 @@ body{
             </div>
             <div>
                 <h3>쓰레기통 관리</h3>
-                <p>설치 위치 · 상태 · 센서 정보를 관리</p>
+                <p>설치 위치·상태·센서 정보를 한눈에 파악하고 관리</p>
             </div>
         </div>
 
@@ -236,7 +247,7 @@ body{
             </div>
             <div>
                 <h3>실시간 모니터링</h3>
-                <p>온도 · 연기 데이터를 24시간 확인</p>
+                <p>쓰레기통 내부 온도·연기 데이터를 24시간 실시간으로 확인</p>
             </div>
         </div>
 
@@ -246,7 +257,7 @@ body{
             </div>
             <div>
                 <h3>알림 기록</h3>
-                <p>과거 경보 이력을 검색하고 분석</p>
+                <p>과거 발생한 화재∙경보 이력을 검색하고 분석</p>
             </div>
         </div>
 
@@ -256,7 +267,7 @@ body{
             </div>
             <div>
                 <h3>설정</h3>
-                <p>시스템 환경 및 알림 설정 관리</p>
+                <p>시스템 환경 및 알림 설정을 관리</p>
             </div>
         </div>
 
