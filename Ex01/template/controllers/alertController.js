@@ -1,0 +1,60 @@
+﻿const alertModel = require("../models/alertModel");
+
+exports.renderAlertPage = (req, res) => {
+  res.render("alert");
+};
+
+exports.getLogs = async (req, res) => {
+  try {
+    const rows = await alertModel.getLogs();
+
+    res.json({
+      success: true,
+      rows
+    });
+  } catch (err) {
+    console.error("알림 기록 조회 실패:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "알림 기록 조회 실패"
+    });
+  }
+};
+
+exports.getStats = async (req, res) => {
+  try {
+    const stats = await alertModel.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (err) {
+    console.error("알림 통계 조회 실패:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "알림 통계 조회 실패"
+    });
+  }
+};
+
+exports.markAllRead = async (req, res) => {
+  try {
+    const result = await alertModel.markAllRead();
+
+    res.json({
+      success: true,
+      message: "전체 읽음 처리 완료",
+      changedRows: result.changedRows
+    });
+  } catch (err) {
+    console.error("전체 읽음 처리 실패:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "전체 읽음 처리 실패"
+    });
+  }
+};
