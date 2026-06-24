@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -29,10 +29,11 @@
             <a href="#how">작동 방식</a>
             <a href="#hardware">하드웨어</a>
             <a href="#about">팀 소개</a>
+            <a href="/dashboard">대시보드</a>
         </div>
 
         <!-- 오른쪽 버튼 -->
-        <div class="auth">
+        <div class="auth" id="authArea">
             <button class="login" onclick="location.href='/login'">로그인</button>
             <button class="sigup" onclick="location.href='/join'">회원가입</button>
         </div>
@@ -521,7 +522,32 @@
     function closeModal() {
         document.getElementById('modal').style.display = 'none';
     }
+
+    function renderMainAuth() {
+        const authArea = document.getElementById("authArea");
+        if (!authArea) return;
+
+        const email = sessionStorage.getItem("mgr_email");
+        const name = sessionStorage.getItem("mgr_name") || "관리자";
+
+        if (!email) return;
+
+        authArea.innerHTML = `
+            <button class="login" type="button">${name}</button>
+            <button class="sigup" type="button" onclick="logoutFromMain()">로그아웃</button>
+        `;
+    }
+
+
+    function logoutFromMain() {
+        sessionStorage.clear();
+        alert("로그아웃하였습니다.");
+        location.href = "/login";
+    }
+    renderMainAuth();
 </script>
 
 </body>
 </html>
+
+

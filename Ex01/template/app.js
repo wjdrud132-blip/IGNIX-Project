@@ -18,9 +18,11 @@ app.use(session({
   secret: "fids-session-secret",
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     httpOnly: true,
-    sameSite: "lax"
+    sameSite: "lax",
+    maxAge: 1000 * 60 * 60 * 8
   }
 }));
 

@@ -15,7 +15,11 @@ router.get("/list", (req, res) => {
       m.mgr_name,
       m.mgr_phone,
       a.alert_id,
-      a.alert_type,
+      CASE
+        WHEN b.bin_id IN (1, 2, 3, 4) THEN 'danger'
+        WHEN b.bin_id IN (5, 6, 7) THEN 'warning'
+        ELSE 'normal'
+      END AS alert_type,
       a.alert_msg,
       a.alerted_at,
       a.is_received
@@ -36,10 +40,9 @@ router.get("/list", (req, res) => {
       ON b.bin_id = a.bin_id
     ORDER BY
       CASE
-        WHEN a.alert_type = 'danger' THEN 1
-        WHEN a.alert_type = 'warning' THEN 2
-        WHEN a.alert_type = 'normal' THEN 3
-        ELSE 4
+        WHEN b.bin_id IN (1, 2, 3, 4) THEN 1
+        WHEN b.bin_id IN (5, 6, 7) THEN 2
+        ELSE 3
       END,
       b.bin_id ASC
   `;
@@ -112,6 +115,7 @@ router.delete("/:bin_id", (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
