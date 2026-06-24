@@ -1,0 +1,163 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 승인 관리 - FIDS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Pretendard", "Apple SD Gothic Neo", Arial, sans-serif; background: #f5f6fa; min-height: 100vh; color: #10172f; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; flex-shrink: 0; background: #1a2235; display: flex; flex-direction: column; min-height: 100vh; }
+    .sb-logo { padding: 20px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .sb-logo-title { font-size: 16px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .sb-logo-title span { display: inline-block; width: 3px; height: 16px; background: #2d6be4; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+    .sb-logo-sub2 { font-size: 10px; color: rgba(255,255,255,.3); margin-top: 3px; }
+    .sb-logo-sub { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 2px; }
+    .sb-nav { padding: 14px 10px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: rgba(255,255,255,.55); cursor: pointer; margin-bottom: 2px; }
+    .nav-item.active, .nav-item:hover { background: rgba(255,255,255,.10); color: #fff; }
+    .nav-item i { font-size: 17px; }
+    .sb-bottom { padding: 14px 10px; border-top: 1px solid rgba(255,255,255,.08); }
+    .sb-user { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 2px; }
+    .sb-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sb-avatar i { font-size: 15px; color: rgba(255,255,255,.7); }
+    .sb-user-name { font-size: 12px; font-weight: 600; color: #fff; }
+    .sb-user-email { font-size: 10px; color: rgba(255,255,255,.4); margin-top: 1px; }
+    .sb-logout { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13px; color: rgba(255,255,255,.4); cursor: pointer; border-radius: 8px; }
+    .sb-logout:hover { color: #fff; background: rgba(255,255,255,.06); }
+    .main { flex: 1; padding: 34px 40px; overflow-y: auto; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+    .title { font-size: 24px; font-weight: 800; color: #10172f; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: #8b93a3; }
+    .operator { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e8e9ed; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #555; }
+    .operator i { color: #2d6be4; font-size: 18px; }
+    .summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .summary-card { background: #fff; border: 1px solid #e8e9ed; border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; }
+    .summary-label { font-size: 12px; font-weight: 800; color: #667085; margin-bottom: 8px; }
+    .summary-num { font-size: 28px; font-weight: 800; color: #10172f; }
+    .summary-icon { width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; color: #2d6be4; display: grid; place-items: center; font-size: 22px; }
+    .card { background: #fff; border: 1px solid #e8e9ed; border-radius: 12px; box-shadow: 0 4px 30px rgba(0,0,0,.05); overflow: hidden; }
+    .card-head { padding: 18px 20px; border-bottom: 1px solid #eef0f4; display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 16px; font-weight: 800; color: #10172f; }
+    .refresh-btn { height: 34px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #d8e1f2; background: #f4f7fd; color: #4a6fa5; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .refresh-btn:hover { background: #e8effb; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f8fafc; text-align: left; font-size: 12px; color: #667085; font-weight: 800; padding: 14px 18px; border-bottom: 1px solid #eef0f4; }
+    td { font-size: 13px; color: #333; padding: 15px 18px; border-bottom: 1px solid #f1f3f6; }
+    tr:last-child td { border-bottom: none; }
+    .email { color: #64748b; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+    .approve-btn { height: 32px; padding: 0 12px; border-radius: 8px; border: none; background: #1a2235; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .approve-btn:hover { background: #243040; }
+    .empty { padding: 42px 20px; text-align: center; color: #9aa0ad; font-size: 14px; }
+    .empty i { display: block; font-size: 34px; color: #c6ccd6; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sb-logo">
+        <div class="sb-logo-title"><span></span>FIDS</div>
+        <div class="sb-logo-sub2">쓰레기통 화재 감지 시스템</div>
+        <div class="sb-logo-sub">관리자 대시보드</div>
+      </div>
+<div class="sb-nav">
+  <div class="nav-item" onclick="location.href='/dashboard'">
+    <i class="ti ti-home"></i>대시보드
+  </div>
+
+  <div class="nav-item" onclick="location.href='/trashbins'">
+    <i class="ti ti-trash"></i>쓰레기통 관리
+  </div>
+
+  <div class="nav-item" onclick="location.href='/realtime'">
+    <i class="ti ti-chart-line"></i>실시간 모니터링
+  </div>
+
+  <div class="nav-item" onclick="location.href='/alert'">
+    <i class="ti ti-bell"></i>알림 기록
+  </div>
+
+  <div class="nav-item active" onclick="location.href='/admin/approval'">
+    <i class="ti ti-user-check"></i>관리자 승인 관리
+  </div>
+
+  <div class="nav-item" onclick="location.href='/settings'"><i class="ti ti-settings"></i>설정</div>
+</div>
+      <div class="sb-bottom">
+        <div class="sb-user">
+          <div class="sb-avatar"><i class="ti ti-user"></i></div>
+          <div>
+            <div id="userName" class="sb-user-name">운영자</div>
+            <div id="userEmail" class="sb-user-email">operator@korea.kr</div>
+          </div>
+        </div>
+        <div id="logoutBtn" class="sb-logout"><i class="ti ti-logout"></i>로그아웃</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <div class="title">운영자 승인 관리</div>
+          <div class="sub">일반 관리자 가입 요청을 확인하고 승인합니다.</div>
+        </div>
+        <div class="operator"><i class="ti ti-shield-check"></i><span id="operatorName">운영자</span></div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-card"><div><div class="summary-label">승인 대기</div><div><span id="pendingCount" class="summary-num">0</span> 건</div></div><div class="summary-icon"><i class="ti ti-user-question"></i></div></div>
+        <div class="summary-card"><div><div class="summary-label">운영자 권한</div><div class="summary-num" style="font-size:18px">접속 허용</div></div><div class="summary-icon"><i class="ti ti-shield-check"></i></div></div>
+        <div class="summary-card"><div><div class="summary-label">현재 계정</div><div id="summaryEmail" class="summary-num" style="font-size:18px">operator@korea.kr</div></div><div class="summary-icon"><i class="ti ti-id"></i></div></div>
+      </div>
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">승인 대기 목록</div>
+          <button id="refreshBtn" class="refresh-btn" type="button"><i class="ti ti-refresh"></i>새로고침</button>
+        </div>
+        <div id="tableArea"></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const role = sessionStorage.getItem("role");
+    const mgrName = sessionStorage.getItem("mgr_name");
+    const mgrEmail = sessionStorage.getItem("mgr_email");
+
+    userName.textContent = mgrName || "운영자";
+    userEmail.textContent = mgrEmail || "operator@korea.kr";
+    operatorName.textContent = mgrName || "운영자";
+    summaryEmail.textContent = mgrEmail || "operator@korea.kr";
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return date.getFullYear() + "." + String(date.getMonth() + 1).padStart(2, "0") + "." + String(date.getDate()).padStart(2, "0") + " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
+    }
+    async function loadManagers() {
+      const response = await fetch("/admin/managers");
+
+      const managers = await response.json();
+      pendingCount.textContent = managers.length;
+      if (!managers.length) {
+        tableArea.innerHTML = '<div class="empty"><i class="ti ti-user-check"></i>승인 대기 중인 관리자가 없습니다.</div>';
+        return;
+      }
+      tableArea.innerHTML = `<table><thead><tr><th>이름</th><th>이메일</th><th>전화번호</th><th>요청일시</th><th>상태</th><th>관리</th></tr></thead><tbody>${managers.map((manager) => `<tr><td><b>${manager.mgr_name || "-"}</b></td><td class="email">${manager.mgr_email || "-"}</td><td>${manager.mgr_phone || "-"}</td><td>${formatDate(manager.joined_at)}</td><td><span class="badge"><i class="ti ti-clock"></i>승인 대기</span></td><td><button class="approve-btn" type="button" onclick="approveManager(${manager.mgr_id})">승인</button></td></tr>`).join("")}</tbody></table>`;
+    }
+    async function approveManager(mgrId) {
+      if (!confirm("이 관리자를 승인하시겠습니까?")) return;
+      const response = await fetch("/admin/managers/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mgr_id: mgrId }) });
+      const result = await response.json();
+      alert(result.message || "처리가 완료되었습니다.");
+      loadManagers();
+    }
+    refreshBtn.addEventListener("click", loadManagers);
+    logoutBtn.addEventListener("click", async () => {
+      try { await fetch("/manager/logout", { method: "POST" }); } catch (error) {}
+      sessionStorage.clear();
+      location.href = "/login";
+    });
+    loadManagers();
+  </script>
+</body>
+</html>
