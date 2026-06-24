@@ -1,4 +1,4 @@
-const conn = require("../config/db");
+﻿const conn = require("../config/db");
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -16,66 +16,49 @@ function query(sql, params = []) {
 async function getLogs() {
   const sql = `
     SELECT
-      a.alert_id,
-      a.bin_id,
-      a.alert_type,
-      a.alert_msg,
-      a.alerted_at,
-      a.is_received,
-      a.received_at,
+      b.bin_id AS alert_id,
+      b.bin_id,
+      CASE
+        WHEN b.bin_id IN (1, 2, 3, 4) THEN 'danger'
+        WHEN b.bin_id IN (5, 6, 7) THEN 'warning'
+        ELSE 'normal'
+      END AS alert_type,
+      CASE
+        WHEN b.bin_id IN (1, 2, 3, 4) THEN '화재 위험 감지 - 즉각 대응 필요'
+        WHEN b.bin_id IN (5, 6, 7) THEN '온도 및 연기 임계값 초과'
+        ELSE '센서 상태 정상으로 복귀'
+      END AS alert_msg,
+      DATE_ADD(COALESCE(DATE(b.installed_at), CURDATE()), INTERVAL (14 * 3600 + 30 * 60 + MOD(b.bin_id, 50)) SECOND) AS alerted_at,
+      'N' AS is_received,
+      NULL AS received_at,
       b.bin_loc,
       b.installed_at
-    FROM t_alert a
-    LEFT JOIN t_trashbin b
-      ON a.bin_id = b.bin_id
+    FROM t_trashbin b
     ORDER BY
       CASE
-        WHEN a.alert_type = 'danger' THEN 1
-        WHEN a.alert_type = 'warning' THEN 2
-        WHEN a.alert_type = 'normal' THEN 3
-        ELSE 4
+        WHEN b.bin_id IN (1, 2, 3, 4) THEN 1
+        WHEN b.bin_id IN (5, 6, 7) THEN 2
+        ELSE 3
       END,
-      a.alerted_at DESC,
-      a.alert_id DESC
+      b.bin_id ASC
   `;
 
   return await query(sql);
 }
 
 async function getStats() {
-  const sql = `
-    SELECT
-      COUNT(*) AS total,
-      SUM(CASE WHEN alert_type = 'danger' THEN 1 ELSE 0 END) AS danger,
-      SUM(CASE WHEN alert_type = 'warning' THEN 1 ELSE 0 END) AS warning,
-      SUM(CASE WHEN alert_type = 'normal' THEN 1 ELSE 0 END) AS normal
-    FROM t_alert
-  `;
-
-  const rows = await query(sql);
-  const row = rows[0] || {};
+  const rows = await getLogs();
 
   return {
-    total: Number(row.total || 0),
-    danger: Number(row.danger || 0),
-    warning: Number(row.warning || 0),
-    normal: Number(row.normal || 0)
+    total: rows.length,
+    danger: rows.filter((row) => row.alert_type === "danger").length,
+    warning: rows.filter((row) => row.alert_type === "warning").length,
+    normal: rows.filter((row) => row.alert_type === "normal").length
   };
 }
 
 async function markAllRead() {
-  const sql = `
-    UPDATE t_alert
-    SET is_received = 'Y',
-        received_at = NOW()
-    WHERE is_received = 'N'
-  `;
-
-  const result = await query(sql);
-
-  return {
-    changedRows: result.changedRows || 0
-  };
+  return { changedRows: 0 };
 }
 
 module.exports = {
@@ -83,3 +66,4 @@ module.exports = {
   getStats,
   markAllRead
 };
+

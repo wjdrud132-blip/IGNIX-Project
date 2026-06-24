@@ -151,7 +151,7 @@
       <div class="nav-item" onclick="location.href='/realtime'"><i class="ti ti-chart-line"></i>실시간 모니터링</div>
       <div class="nav-item active" onclick="location.href='/alert'"><i class="ti ti-bell"></i>알림 기록</div>
       <div class="nav-item operator-menu" onclick="location.href='/admin/approval'"><i class="ti ti-user-check"></i>관리자 승인 관리</div>
-      <div class="nav-item" onclick="location.href='/settings'"><i class="ti ti-settings"></i>설정</div>
+      <div class="nav-item" onclick="location.href='/settings'"><i class="ti ti-settings"></i>설정</div><div class="nav-item" onclick="location.href='/'"><i class="ti ti-home-2"></i>메인페이지</div>
     </div>
     <div class="sb-bottom">
       <div class="sb-user">
@@ -265,7 +265,7 @@
     function parseTemp(msg) { const match = String(msg || "").match(/온도\s*([0-9.]+)/); return match ? match[1] + "°C" : "-"; }
     function parseSmoke(msg) { const match = String(msg || "").match(/연기 감지값\s*(\d+)/); return match ? match[1] : "-"; }
     function timeOnly(value) { if (!value) return "-"; const date = new Date(value); return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") + ":" + String(date.getSeconds()).padStart(2, "0"); }
-    function monthKey(value) { const date = new Date(value); return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0"); }
+    function monthKey(value) { const date = new Date(value); if (Number.isNaN(date.getTime())) return ""; return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0"); }
 
     function filteredRows() {
       const sensorKeyword = $("sensorSearch").value.trim().replace("#", "");
@@ -316,15 +316,43 @@
     function renderMonthChart() {
       const months = {};
       alertRows.forEach((row) => {
-        const key = monthKey(row.installed_at || row.alerted_at);
+        const key = monthKey(row.alerted_at);
+        if (!key) return;
         if (!months[key]) months[key] = { danger: 0, warning: 0, normal: 0 };
         if (row.alert_type === "danger") months[key].danger += 1;
         if (row.alert_type === "warning") months[key].warning += 1;
         if (row.alert_type === "normal") months[key].normal += 1;
       });
-      const labels = Object.keys(months).sort();
+
+      const keys = Object.keys(months).sort();
+      const labels = keys;
+      const maxTotal = Math.max(0, ...keys.map((key) => months[key].danger + months[key].warning + months[key].normal));
+      const yMax = Math.max(10, Math.ceil(maxTotal / 5) * 5);
       if (monthChart) monthChart.destroy();
-      monthChart = new Chart($("monthChart"), { type: "bar", data: { labels, datasets: [{ label: "위험", data: labels.map((key) => months[key].danger), backgroundColor: "#fca5a5", borderRadius: 4 }, { label: "주의", data: labels.map((key) => months[key].warning), backgroundColor: "#fcd34d", borderRadius: 4 }, { label: "정상복귀", data: labels.map((key) => months[key].normal), backgroundColor: "#6ee7b7", borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
+      monthChart = new Chart($("monthChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "위험", data: keys.map((key) => months[key].danger), backgroundColor: "#fca5a5", borderRadius: 3, barThickness: 118, maxBarThickness: 130 },
+            { label: "주의", data: keys.map((key) => months[key].warning), backgroundColor: "#fcd34d", borderRadius: 3, barThickness: 118, maxBarThickness: 130 },
+            { label: "정상복귀", data: keys.map((key) => months[key].normal), backgroundColor: "#6ee7b7", borderRadius: 3, barThickness: 118, maxBarThickness: 130 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { left: 180, right: 180 } },
+          plugins: {
+            legend: { position: "bottom", labels: { boxWidth: 12, boxHeight: 12, padding: 18 } },
+            tooltip: { mode: "index", intersect: false }
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: "#9ca3af" } },
+            y: { stacked: true, beginAtZero: true, max: yMax, ticks: { stepSize: 2, color: "#9ca3af" }, grid: { color: "#edf0f5" } }
+          }
+        }
+      });
     }
 
     function renderFrequency() {
@@ -468,6 +496,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 
