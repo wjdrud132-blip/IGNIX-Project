@@ -132,7 +132,7 @@
     .all-alert-row.danger{background:#fff5f5;}
     .all-alert-row.read strong{font-weight:500;color:#6b7280;}
     .all-alert-row.read span,.all-alert-row.read p,.all-alert-row.read time{color:#b0b7c3;}
-    .all-alert-row strong{display:block;font-size:13px;color:#dc2626;margin-bottom:4px;}
+    .all-alert-row strong{display:block;font-size:13px;color:#111827;margin-bottom:4px;}
     .all-alert-row span,.all-alert-row p,.all-alert-row time{font-size:12px;color:#475569;}
     .all-alert-row time{text-align:right;color:#94a3b8;}
 
@@ -232,6 +232,8 @@
     </div>
   </div>
   <script>
+const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
+
     const $ = (id) => document.getElementById(id);
     let alertRows = [];
     let currentPage = 1;
@@ -460,7 +462,7 @@
     async function loadTopbarAlerts(){
       try {
         const response = await fetch("/alerts/list");
-        topbarAlerts = await response.json();
+        topbarAlerts = fidsApplyAlertReadState(await response.json());
         if (!Array.isArray(topbarAlerts)) topbarAlerts = [];
       } catch (error) {
         topbarAlerts = [];
@@ -474,6 +476,7 @@
         topbarAlertDropdown.classList.toggle("open");
       });
       topbarReadAllBtn.addEventListener("click", async () => {
+        fidsMarkAlertsRead();
         await fetch("/alerts/read-all", { method: "POST" });
         await loadTopbarAlerts();
       });

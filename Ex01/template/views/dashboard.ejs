@@ -311,6 +311,8 @@
   </div>
 
   <script>
+const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
+
     const role = sessionStorage.getItem("role");
     const mgrName = sessionStorage.getItem("mgr_name");
     const mgrEmail = sessionStorage.getItem("mgr_email");
@@ -373,6 +375,7 @@
     });
 
     readAllBtn.addEventListener("click", async () => {
+      fidsMarkAlertsRead();
       await fetch("/alerts/read-all", { method: "POST" });
       await loadDashboardData();
     });
@@ -450,7 +453,8 @@
       const binResponse = await fetch("/trashbins/list");
       const alertResponse = await fetch("/alerts/list");
       const bins = await binResponse.json();
-      const alerts = await alertResponse.json();
+      let alerts = await alertResponse.json();
+      alerts = fidsApplyAlertReadState(alerts);
       const sortRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : type === "normal" ? 3 : 4;
       bins.sort((a, b) => sortRank(a.alert_type) - sortRank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id));
       alerts.sort((a, b) => sortRank(a.alert_type) - sortRank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id));

@@ -15,7 +15,7 @@ router.get("/managers", requireOperator, (req, res) => {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("?뱀씤 ?湲?紐⑸줉 議고쉶 ?ㅽ뙣:", err);
+      console.error("승인 대기 목록 조회 실패:", err);
 
       return res.status(500).json({
         message: "승인 대기 목록 조회 실패",
@@ -44,7 +44,7 @@ router.post("/managers/approve", requireOperator, (req, res) => {
 
   conn.query(sql, [mgr_id], (err, result) => {
     if (err) {
-      console.error("愿由ъ옄 ?뱀씤 ?ㅽ뙣:", err);
+      console.error("관리자 승인 실패:", err);
 
       return res.status(500).json({
         message: "관리자 승인 실패",

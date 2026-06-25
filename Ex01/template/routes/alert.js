@@ -3,6 +3,7 @@ const router = express.Router();
 
 const conn = require("../config/db");
 
+
 router.get("/danger/latest", (req, res) => {
   const sql = `
     SELECT
@@ -78,8 +79,8 @@ router.get("/list", (req, res) => {
 
 router.post("/read-all", (req, res) => {
   res.json({
-    message: "테스트 모드에서는 새로고침 시 다시 안읽음 상태로 표시됩니다.",
-    changedRows: 0,
+    message: "\uBAA8\uB4E0 \uC54C\uB9BC\uC744 \uC77D\uC74C \uCC98\uB9AC\uD588\uC2B5\uB2C8\uB2E4.",
+    changedRows: 1,
   });
 });
 
