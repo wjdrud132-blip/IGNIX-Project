@@ -26,6 +26,15 @@ app.use(session({
   }
 }));
 
+
+const protectedPagePaths = ["/dashboard", "/trashbins", "/realtime", "/alert", "/settings", "/admin/approval"];
+app.use(protectedPagePaths, (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
+});
+
 app.use("/manager", managerRouter);
 app.use("/admin", adminRouter);
 app.use("/alerts", alertRouter);

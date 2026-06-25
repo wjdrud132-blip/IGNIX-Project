@@ -256,7 +256,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     $("userName").textContent = mgrName || "관리자";
     $("userEmail").textContent = mgrEmail || "admin@korea.kr";
     document.querySelectorAll(".operator-menu").forEach((item) => { item.style.display = role === "operator" ? "flex" : "none"; });
-    $("logoutBtn").onclick = () => { sessionStorage.clear(); location.href = "/login"; };
+    $("logoutBtn").onclick = () => { sessionStorage.clear(); alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4."); location.replace("/"); };
 
     function setNowText() {
       const now = new Date();
@@ -499,12 +499,13 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     setInterval(setNowText, 1000);
     loadLogs();
   </script>
+
+<script id="alertPageBackGuard">
+  window.addEventListener("pageshow", function () {
+    if (!sessionStorage.getItem("role")) {
+      location.replace("/");
+    }
+  });
+</script>
 </body>
 </html>
-
-
-
-
-
-
-

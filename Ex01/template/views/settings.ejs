@@ -365,7 +365,7 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
       activateNav(current);
     }
 
-    document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/manager/logout", { method: "POST" }); sessionStorage.clear(); location.href = "/login"; });
+    document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/manager/logout", { method: "POST" }); sessionStorage.clear(); alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4."); location.replace("/"); });
     document.getElementById("setContent").addEventListener("scroll", syncActiveNavByScroll);
 
 
@@ -452,6 +452,14 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
     loadThresholds();
     loadProfile();
   </script>  <script src="/js/fire-alert.js"></script>
+
+<script>
+  window.addEventListener("pageshow", function () {
+    if (!sessionStorage.getItem("role")) {
+      location.replace("/");
+    }
+  });
+</script>
 </body>
 </html>
 

@@ -197,9 +197,18 @@
     logoutBtn.addEventListener("click", async () => {
       try { await fetch("/manager/logout", { method: "POST" }); } catch (error) {}
       sessionStorage.clear();
-      location.href = "/login";
+      alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+      location.replace("/");
     });
     loadManagers();
   </script>
+
+<script>
+  window.addEventListener("pageshow", function () {
+    if (!sessionStorage.getItem("role")) {
+      location.replace("/");
+    }
+  });
+</script>
 </body>
 </html>

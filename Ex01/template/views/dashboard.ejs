@@ -341,7 +341,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     document.getElementById("logoutBtn").addEventListener("click", () => {
       sessionStorage.clear();
-      location.href = "/login";
+      alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+      location.replace("/");
     });
 
     function filterTable(type, btn) {
@@ -516,7 +517,15 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     loadDashboardData();
   </script>
   <script src="/js/fire-alert.js"></script>
-<script>document.querySelectorAll(".operator-menu").forEach((item)=>{item.style.display=sessionStorage.getItem("role")==="operator"?"flex":"none";});</script></body>
+<script>document.querySelectorAll(".operator-menu").forEach((item)=>{item.style.display=sessionStorage.getItem("role")==="operator"?"flex":"none";});</script>
+<script>
+  window.addEventListener("pageshow", function () {
+    if (!sessionStorage.getItem("role")) {
+      location.replace("/");
+    }
+  });
+</script>
+</body>
 </html>
 
 

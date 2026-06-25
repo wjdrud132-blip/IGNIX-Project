@@ -542,7 +542,7 @@
     function logoutFromMain() {
         sessionStorage.clear();
         alert("로그아웃하였습니다.");
-        location.href = "/login";
+        location.replace("/");
     }
     renderMainAuth();
 </script>
