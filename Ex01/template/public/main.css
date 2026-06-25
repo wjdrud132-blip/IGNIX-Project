@@ -91,6 +91,11 @@
             padding: 8px 14px;
             background: white;
             border-radius: 8px; 
+            cursor: pointer;
+        }
+
+        .login:hover {
+            border: 1px solid #888;
         }
 
         .sigup {
@@ -100,6 +105,11 @@
             padding: 8px 14px;
             border-radius: 8px;
             margin-left: 10px;
+            cursor: pointer;
+        }
+
+        .sigup:hover {
+            opacity : 0.6;
         }
 
         /*===============
@@ -139,7 +149,7 @@
         .hero p {
             margin-top: 20px;
             color: #696C7A;
-            max-width: 560px;
+            max-width: 700px;
             line-height: 1.8;
             margin-bottom: 36px;
             font-size: 16px;
@@ -203,12 +213,17 @@
     line-height: 1.25;
 }
 
+.section-text {
+    color: #888;
+}
+
 /* 섹션 설명 */
 .section-desc {
     font-size: 15px;
     color: #888;
     line-height: 1.8;
     max-width: 560px;
+    white-space: nowrap;
 }
 
 /* 2열 그리드 레이아웃 */
