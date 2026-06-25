@@ -38,6 +38,9 @@
     .summary-label { font-size: 12px; font-weight: 800; color: #667085; margin-bottom: 8px; }
     .summary-num { font-size: 28px; font-weight: 800; color: #10172f; }
     .summary-icon { width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; color: #2d6be4; display: grid; place-items: center; font-size: 22px; }
+    .tab-row { display: inline-flex; gap: 6px; background: #eef2f7; padding: 4px; border-radius: 10px; margin-bottom: 14px; }
+    .tab-btn { height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #64748b; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .tab-btn.active { background: #fff; color: #10172f; box-shadow: 0 1px 5px rgba(15,23,42,.08); }
     .card { background: #fff; border: 1px solid #e8e9ed; border-radius: 12px; box-shadow: 0 4px 30px rgba(0,0,0,.05); overflow: hidden; }
     .card-head { padding: 18px 20px; border-bottom: 1px solid #eef0f4; display: flex; align-items: center; justify-content: space-between; }
     .card-title { font-size: 16px; font-weight: 800; color: #10172f; }
@@ -49,8 +52,11 @@
     tr:last-child td { border-bottom: none; }
     .email { color: #64748b; }
     .badge { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+    .action-group { display: flex; gap: 8px; align-items: center; }
     .approve-btn { height: 32px; padding: 0 12px; border-radius: 8px; border: none; background: #1a2235; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .approve-btn:hover { background: #243040; }
+    .reject-btn { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #fecaca; background: #fff5f5; color: #dc2626; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .reject-btn:hover { background: #fee2e2; }
     .empty { padding: 42px 20px; text-align: center; color: #9aa0ad; font-size: 14px; }
     .empty i { display: block; font-size: 34px; color: #c6ccd6; margin-bottom: 10px; }
   </style>
@@ -107,9 +113,10 @@
       </div>
       <div class="summary-row">
         <div class="summary-card"><div><div class="summary-label">승인 대기</div><div><span id="pendingCount" class="summary-num">0</span> 건</div></div><div class="summary-icon"><i class="ti ti-user-question"></i></div></div>
-        <div class="summary-card"><div><div class="summary-label">운영자 권한</div><div class="summary-num" style="font-size:18px">접속 허용</div></div><div class="summary-icon"><i class="ti ti-shield-check"></i></div></div>
+        <div class="summary-card"><div><div class="summary-label">승인 완료</div><div><span id="approvedCount" class="summary-num">0</span> 건</div></div><div class="summary-icon"><i class="ti ti-user-check"></i></div></div>
         <div class="summary-card"><div><div class="summary-label">현재 계정</div><div id="summaryEmail" class="summary-num" style="font-size:18px">operator@korea.kr</div></div><div class="summary-icon"><i class="ti ti-id"></i></div></div>
       </div>
+      <div class="tab-row"><button id="pendingTab" class="tab-btn active" type="button" onclick="switchTab('pending')">승인 대기 목록</button><button id="approvedTab" class="tab-btn" type="button" onclick="switchTab('approved')">승인처리완료</button></div>
       <section class="card">
         <div class="card-head">
           <div class="card-title">승인 대기 목록</div>
@@ -133,22 +140,57 @@
       const date = new Date(value);
       return date.getFullYear() + "." + String(date.getMonth() + 1).padStart(2, "0") + "." + String(date.getDate()).padStart(2, "0") + " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
     }
-    async function loadManagers() {
-      const response = await fetch("/admin/managers");
+    let currentTab = "pending";
 
+    function switchTab(tab) {
+      currentTab = tab;
+      pendingTab.classList.toggle("active", tab === "pending");
+      approvedTab.classList.toggle("active", tab === "approved");
+      loadManagers();
+    }
+
+    async function loadCounts() {
+      const pendingResponse = await fetch("/admin/managers");
+      const approvedResponse = await fetch("/admin/managers/approved");
+      const pendingManagers = await pendingResponse.json();
+      const approvedManagers = await approvedResponse.json();
+      pendingCount.textContent = Array.isArray(pendingManagers) ? pendingManagers.length : 0;
+      approvedCount.textContent = Array.isArray(approvedManagers) ? approvedManagers.length : 0;
+    }
+
+    async function loadManagers() {
+      const url = currentTab === "approved" ? "/admin/managers/approved" : "/admin/managers";
+      const response = await fetch(url);
       const managers = await response.json();
-      pendingCount.textContent = managers.length;
-      if (!managers.length) {
-        tableArea.innerHTML = '<div class="empty"><i class="ti ti-user-check"></i>승인 대기 중인 관리자가 없습니다.</div>';
+      await loadCounts();
+
+      if (!Array.isArray(managers) || !managers.length) {
+        const emptyText = currentTab === "approved" ? "승인 처리 완료된 관리자가 없습니다." : "승인 대기 중인 관리자가 없습니다.";
+        tableArea.innerHTML = '<div class="empty"><i class="ti ti-user-check"></i>' + emptyText + '</div>';
         return;
       }
-      tableArea.innerHTML = `<table><thead><tr><th>이름</th><th>이메일</th><th>전화번호</th><th>요청일시</th><th>상태</th><th>관리</th></tr></thead><tbody>${managers.map((manager) => `<tr><td><b>${manager.mgr_name || "-"}</b></td><td class="email">${manager.mgr_email || "-"}</td><td>${manager.mgr_phone || "-"}</td><td>${formatDate(manager.joined_at)}</td><td><span class="badge"><i class="ti ti-clock"></i>승인 대기</span></td><td><button class="approve-btn" type="button" onclick="approveManager(${manager.mgr_id})">승인</button></td></tr>`).join("")}</tbody></table>`;
+
+      const tableTitle = currentTab === "approved" ? "승인 완료" : "승인 대기";
+      tableArea.innerHTML = `<table><thead><tr><th>이름</th><th>이메일</th><th>전화번호</th><th>요청일시</th><th>상태</th><th>관리</th></tr></thead><tbody>${managers.map((manager) => {
+        const actionHtml = currentTab === "approved" ? "-" : `<div class="action-group"><button class="approve-btn" type="button" onclick="approveManager(${manager.mgr_id})">승인</button><button class="reject-btn" type="button" onclick="rejectManager(${manager.mgr_id})">거절</button></div>`;
+        const statusIcon = currentTab === "approved" ? "ti-check" : "ti-clock";
+        return `<tr><td><b>${manager.mgr_name || "-"}</b></td><td class="email">${manager.mgr_email || "-"}</td><td>${manager.mgr_phone || "-"}</td><td>${formatDate(manager.joined_at)}</td><td><span class="badge"><i class="ti ${statusIcon}"></i>${tableTitle}</span></td><td>${actionHtml}</td></tr>`;
+      }).join("")}</tbody></table>`;
     }
+
     async function approveManager(mgrId) {
       if (!confirm("이 관리자를 승인하시겠습니까?")) return;
       const response = await fetch("/admin/managers/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mgr_id: mgrId }) });
       const result = await response.json();
       alert(result.message || "처리가 완료되었습니다.");
+      loadManagers();
+    }
+
+    async function rejectManager(mgrId) {
+      if (!confirm("이 관리자 가입 요청을 거절하시겠습니까?")) return;
+      const response = await fetch("/admin/managers/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mgr_id: mgrId }) });
+      const result = await response.json();
+      alert(result.message || "거절 처리되었습니다.");
       loadManagers();
     }
     refreshBtn.addEventListener("click", loadManagers);
