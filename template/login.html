@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIDS 로그인</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Pretendard', sans-serif;
+}
+
+body{
+    background:#f2f3f7;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.container{
+    width:90%;
+    max-width:1300px;
+    min-height:600px;
+    display:flex;
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+}
+
+/* 왼쪽 */
+.left-panel{
+    flex:1.2;
+    background:#141d2e;
+    color:white;
+    padding:85px 50px 85px 70px;
+}
+
+.logo{
+    text-align:center;
+    margin-bottom:50px;
+    margin-left:-23px;
+}
+
+.logo h1{
+    font-size:35px;
+    letter-spacing:2px;
+}
+
+.logo-line{
+    width:50px;
+    height:4px;
+    background:#2d7dff;
+    margin:15px auto;
+    border-radius:5px;
+}
+
+.logo p{
+    color:#aab3c5;
+    font-size:17px;
+    font-weight:400;
+    line-height:1.8;
+}
+
+.feature{
+    display:flex;
+    margin-bottom:25px;
+    align-items:flex-start;
+}
+
+.icon-box{
+    width:50px;
+    height:50px;
+    background:rgba(18, 47, 105, 0.479);
+    border-radius:12px;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    color:#4d93ff;
+    margin-right:16px;
+
+}
+
+.icon-box i{
+    font-size:20px;
+}
+.feature h3{
+    font-size:18px;
+    margin-bottom:0.5px;
+}
+
+.feature p{
+    color:#9ea8bb;
+    font-size:15px;
+}
+
+/* 오른쪽 */
+.right-panel{
+    flex:1;
+    background:#fff;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.login-box{
+    width:450px;
+}
+
+.login-box h2{
+    font-size:28px;
+    color:#141d2e;
+    margin-bottom:8px;
+}
+
+.login-box .sub{
+    color:#9ca3af;
+    margin-bottom:40px;
+}
+
+.label{
+    color: #3b3f46;
+    font-size:15px;
+    font-weight:600;
+    margin-bottom:5px;
+    display:block;
+}
+
+.input-group{
+    position:relative;
+    margin-bottom:20px;
+}
+
+.input-group i{
+    position:absolute;
+    left:15px;
+    top:17px;
+    color:#9ca3af;
+}
+
+.input-group input{
+    width:100%;
+    height:55px;
+    padding-left:45px;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    font-size:15px;
+}
+
+.email-wrap{
+    display:flex;
+}
+
+.email-wrap input{
+    border-top-right-radius:0;
+    border-bottom-right-radius:0;
+}
+
+.domain{
+    width:120px;
+    height:55px;
+    border:1px solid #e5e7eb;
+    border-left:none;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    color:#6b7280;
+    border-radius:0 10px 10px 0;
+}
+
+.login-btn{
+    width:100%;
+    height:58px;
+    background:#141d2e;
+    border:none;
+    color:white;
+    font-size:18px;
+    font-weight:600;
+    border-radius:12px;
+    cursor:pointer;
+    margin-top:15px;
+}
+
+.login-btn:hover{
+    background:#141d2e;
+}
+
+.signup{
+    text-align:center;
+    margin-top:25px;
+    color:#9ca3af;
+}
+
+.signup a{
+    text-decoration:none;
+    color:#2563eb;
+    font-weight:600;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="left-panel">
+
+        <div class="logo">
+            <h1>FIDS</h1>
+            <div class="logo-line"></div>
+            <p>
+                공공 쓰레기통 내부 화재를 실시간으로<br>
+                감지하고 관리하는 스마트 플랫폼
+            </p>
+        </div>
+
+        <div class="feature">
+            <div class="icon-box">
+                <i class="fa-solid fa-table-cells-large"></i>
+            </div>
+            <div>
+                <h3>대시보드</h3>
+                <p>전체 현황을 한 화면에서 직관적으로 파악</p>
+            </div>
+        </div>
+
+        <div class="feature">
+            <div class="icon-box">
+                <i class="fa-solid fa-location-dot"></i>
+            </div>
+            <div>
+                <h3>쓰레기통 관리</h3>
+                <p>설치 위치·상태·센서 정보를 한눈에 파악하고 관리</p>
+            </div>
+        </div>
+
+        <div class="feature">
+            <div class="icon-box">
+                <i class="fa-solid fa-wave-square"></i>
+            </div>
+            <div>
+                <h3>실시간 모니터링</h3>
+                <p>쓰레기통 내부 온도·연기 데이터를 24시간 실시간으로 확인</p>
+            </div>
+        </div>
+
+        <div class="feature">
+            <div class="icon-box">
+                <i class="fa-solid fa-clipboard-list"></i>
+            </div>
+            <div>
+                <h3>알림 기록</h3>
+                <p>과거 발생한 화재∙경보 이력을 검색하고 분석</p>
+            </div>
+        </div>
+
+        <div class="feature">
+            <div class="icon-box">
+                <i class="fa-solid fa-gear"></i>
+            </div>
+            <div>
+                <h3>설정</h3>
+                <p>시스템 환경 및 알림 설정을 관리</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="right-panel">
+
+        <div class="login-box">
+
+            <h2>로그인</h2>
+            <p class="sub">관리자 계정으로 로그인하세요</p>
+
+            <label class="label">이메일</label>
+
+            <div class="email-wrap">
+                <div class="input-group" style="flex:1;margin-bottom:0;">
+                    <i class="fa-regular fa-envelope"></i>
+                    <input type="text" placeholder="이메일을 입력하세요">
+                </div>
+
+                <div class="domain">@korea.kr</div>
+            </div>
+
+            <br>
+
+            <label class="label">비밀번호</label>
+
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" placeholder="비밀번호를 입력하세요">
+            </div>
+
+            <button class="login-btn">
+                <i class="fa-solid fa-right-to-bracket"></i>
+                로그인
+            </button>
+
+            <div class="signup">
+                계정이 없으신가요?
+                <a href="#">회원가입</a>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
