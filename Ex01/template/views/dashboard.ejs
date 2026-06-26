@@ -259,7 +259,7 @@
           </div>
 
           <table>
-            <thead><tr><th>ID</th><th>설치 위치</th><th>상태</th><th>연기 감지값</th><th>온도</th><th>마지막 업데이트</th></tr></thead>
+            <thead><tr><th>ID</th><th>설치 위치</th><th>상태</th><th>연기 감지값</th><th>온도</th><th>불꽃 감지</th><th>마지막 업데이트</th></tr></thead>
             <tbody id="status-tbody">
               <tr id="bin-1" class="danger-row" data-status="danger"><td>#04</td><td><div>#04 주차장 입구</div><div style="font-size:11px;color:#f87171;margin-top:2px;">서울시 마포구</div></td><td><span class="badge danger">위험</span></td><td><b>350</b></td><td><b>68.7°C</b></td><td>14:30:10</td></tr>
               <tr id="bin-2" class="warn-row" data-status="warn"><td>#03</td><td><div>놀이터 옆</div><div style="font-size:11px;color:#bbb;margin-top:2px;">서울시 마포구</div></td><td><span class="badge warn">주의</span></td><td>120</td><td>45.2°C</td><td>14:30:15</td></tr>
@@ -417,14 +417,29 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       return "good";
     }
 
-    function dashboardParseSmoke(msg) {
-      const match = String(msg || "").match(/연기 감지값\s*(\d+)/);
-      return match ? Number(match[1]) : 12;
+    function dashboardFallbackSensorValues(row) {
+      const id = Number(row.bin_id);
+      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305] };
+      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108] };
+      const normalMap = { 8: [28.4, 12], 9: [29.1, 18], 10: [27.8, 9], 11: [30.2, 15], 12: [26.9, 8] };
+      const values = dangerMap[id] || warningMap[id] || normalMap[id] || (row.alert_type === "danger" ? [68.7, 350] : row.alert_type === "warning" ? [45.2, 120] : [28.4, 12]);
+      return { temp: values[0], smoke: values[1], flame: row.alert_type === "danger" ? 1 : 0 };
     }
 
-    function dashboardParseTemp(msg) {
-      const match = String(msg || "").match(/온도\s*([0-9.]+)/);
-      return match ? Number(match[1]) : 28.4;
+    function dashboardParseSmoke(row) {
+      const match = String(row.alert_msg || "").match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+)/);
+      return match ? Number(match[1]) : dashboardFallbackSensorValues(row).smoke;
+    }
+
+    function dashboardParseTemp(row) {
+      const match = String(row.alert_msg || "").match(/\uC628\uB3C4\s*([0-9.]+)/);
+      return match ? Number(match[1]) : dashboardFallbackSensorValues(row).temp;
+    }
+
+    function dashboardParseFlame(row) {
+      if (row.alert_type === "danger") return 1;
+      const match = String(row.alert_msg || "").match(/\uBD88\uAF43\s*\uAC10\uC9C0\s*(0|1)/);
+      return match ? Number(match[1]) : dashboardFallbackSensorValues(row).flame;
     }
 
     function dashboardTime(value) {
@@ -482,8 +497,9 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
           <td>#${row.bin_id}</td>
           <td><div>${row.bin_loc || "-"}</div><div style="font-size:11px;color:#bbb;margin-top:2px;">Wi-Fi 연결</div></td>
           <td><span class="badge ${badge}">${label}</span></td>
-          <td><b>${dashboardParseSmoke(row.alert_msg)}</b></td>
-          <td><b>${dashboardParseTemp(row.alert_msg)}°C</b></td>
+          <td><b>${dashboardParseSmoke(row)}</b></td>
+          <td><b>${dashboardParseTemp(row)}°C</b></td>
+          <td><b>${dashboardParseFlame(row)}</b></td>
           <td>${lastUpdateTime}</td>
         </tr>`;
       }).join("");

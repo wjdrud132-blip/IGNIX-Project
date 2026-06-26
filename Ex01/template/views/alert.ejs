@@ -101,6 +101,8 @@
     .option-btn { height: 58px; border: 1.5px solid #dbe3ef; border-radius: 10px; background: #fff; cursor: pointer; font-weight: 800; color: #64748b; }
     .option-btn.active { border-color: #2d6be4; background: #eff6ff; color: #2d6be4; }
     .check-list { display: grid; gap: 8px; font-size: 13px; color: #334155; }
+    .export-date-range { width: 100%; justify-content: space-between; }
+    .export-date-range .date-input { flex: 1; min-width: 0; }
     .modal-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px; margin-top: 20px; }    .alert-area{position:relative;}
     .alert-button{position:relative;width:38px;height:38px;border:1px solid #e5e7eb;border-radius:50%;background:#fff;cursor:pointer;display:grid;place-items:center;font-size:17px;}
     .alert-button i{font-size:18px;color:#34405a;}
@@ -204,7 +206,7 @@
           <button class="btn primary" type="button" onclick="markAllRead()"><i class="ti ti-check"></i>전체 읽음 처리</button>
         </div>
         <table>
-          <thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기감지값</th><th>발생 시간</th><th>처리 상태</th><th>처리 시간</th></tr></thead>
+          <thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기감지값</th><th>불꽃 감지</th><th>발생 시간</th><th>처리 상태</th><th>처리 시간</th></tr></thead>
           <tbody id="alertBody"></tbody>
         </table>
         <div id="emptyText" class="empty" style="display:none;">조회된 알림 기록이 없습니다.</div>
@@ -218,6 +220,8 @@
       <div class="modal-head"><div><div class="modal-title">알림 기록 내보내기</div><div class="modal-sub">형식과 포함 항목을 선택하세요</div></div><button class="modal-close" type="button" onclick="closeExportModal()">×</button></div>
       <div class="modal-label">파일 형식</div>
       <div class="option-grid"><button class="option-btn active" type="button" data-format="csv" onclick="selectExportFormat('csv')">CSV</button><button class="option-btn" type="button" data-format="excel" onclick="selectExportFormat('excel')">Excel</button><button class="option-btn" type="button" data-format="pdf" onclick="selectExportFormat('pdf')">PDF</button></div>
+      <div class="modal-label">내보내기 기간</div>
+      <div class="date-range export-date-range"><input id="exportStartDate" class="date-input" type="date"><span>~</span><input id="exportEndDate" class="date-input" type="date"></div>
       <div class="modal-label">포함 항목</div>
       <div class="check-list"><label><input id="includeDanger" type="checkbox" checked> 위험 정보</label><label><input id="includeWarning" type="checkbox" checked> 주의 정보</label><label><input id="includeNormal" type="checkbox" checked> 정상 복귀</label></div>
       <div class="modal-actions"><button class="btn" type="button" onclick="closeExportModal()">취소</button><button class="btn primary" type="button" onclick="exportAlerts()"><i class="ti ti-download"></i>내보내기</button></div>
@@ -268,6 +272,32 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function messageFor(type) { if (type === "danger") return "화재 위험 감지 - 즉각 대응 필요"; if (type === "warning") return "온도 및 연기 임계값 초과"; if (type === "normal") return "센서 상태 정상으로 복귀"; return "알림 발생"; }
     function parseTemp(msg) { const match = String(msg || "").match(/온도\s*([0-9.]+)/); return match ? match[1] + "°C" : "-"; }
     function parseSmoke(msg) { const match = String(msg || "").match(/연기 감지값\s*(\d+)/); return match ? match[1] : "-"; }
+    function parseFlame(msg) { const match = String(msg || "").match(/불꽃\s*감지\s*(0|1)/); return match ? match[1] : "0"; }
+    function fallbackSensorValues(row) {
+      const id = Number(row.bin_id);
+      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305] };
+      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108] };
+      const normalMap = { 8: [28.4, 12], 9: [29.1, 18], 10: [27.8, 9], 11: [30.2, 15], 12: [26.9, 8] };
+      const values = dangerMap[id] || warningMap[id] || normalMap[id] || (row.alert_type === "danger" ? [68.7, 350] : row.alert_type === "warning" ? [45.2, 120] : [28.4, 12]);
+      return { temp: values[0], smoke: values[1], flame: row.alert_type === "danger" ? 1 : 0 };
+    }
+
+    function parseTemp(row) {
+      const match = String(row.alert_msg || "").match(/온도\s*([0-9.]+)/);
+      return (match ? match[1] : fallbackSensorValues(row).temp) + "°C";
+    }
+
+    function parseSmoke(row) {
+      const match = String(row.alert_msg || "").match(/연기 감지값\s*(\d+)/);
+      return match ? match[1] : String(fallbackSensorValues(row).smoke);
+    }
+
+    function parseFlame(row) {
+      const match = String(row.alert_msg || "").match(/불꽃\s*감지\s*(0|1)/);
+      if (row.alert_type === "danger") return "1";
+      return match ? match[1] : String(fallbackSensorValues(row).flame);
+    }
+
     function timeOnly(value) { if (!value) return "-"; const date = new Date(value); return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") + ":" + String(date.getSeconds()).padStart(2, "0"); }
     function monthKey(value) { const date = new Date(value); if (Number.isNaN(date.getTime())) return ""; return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0"); }
 
@@ -301,7 +331,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
         const isRead = testReadMode;
         const trClass = isRead ? "read-row" : row.alert_type === "danger" ? "danger-row" : row.alert_type === "warning" ? "warning-row" : "";
         const badgeClass = isRead ? "read" : row.alert_type;
-        return `<tr class="${trClass}"><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row.alert_msg)}</td><td>${parseSmoke(row.alert_msg)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead ? timeOnly(new Date()) : "-"}</td></tr>`;
+        return `<tr class="${trClass}"><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead ? timeOnly(new Date()) : "-"}</td></tr>`;
       }).join("");
       const end = Math.min(start + pageLimit, rows.length);
       $("pagerInfo").textContent = rows.length ? `총 ${rows.length}건 중 ${start + 1}-${end}건 표시` : "총 0건";
@@ -376,10 +406,15 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function exportRows() {
       const allowed = [];
+      const exportStart = $("exportStartDate").value;
+      const exportEnd = $("exportEndDate").value;
       if ($("includeDanger").checked) allowed.push("danger");
       if ($("includeWarning").checked) allowed.push("warning");
       if ($("includeNormal").checked) allowed.push("normal");
-      return sortRows(filteredRows()).filter((row) => allowed.includes(row.alert_type));
+      return sortRows(filteredRows()).filter((row) => {
+        const alertDate = row.alerted_at ? new Date(row.alerted_at).toISOString().slice(0, 10) : "";
+        return allowed.includes(row.alert_type) && (!exportStart || alertDate >= exportStart) && (!exportEnd || alertDate <= exportEnd);
+      });
     }
 
     function csvEscape(value) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
@@ -387,12 +422,12 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function exportAlerts() {
       const rows = exportRows();
-      const lines = [["유형", "센서 ID", "설치 위치", "내용", "온도", "연기감지값", "발생 시간", "처리 상태", "처리 시간"]];
-      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row.alert_msg), parseSmoke(row.alert_msg), timeOnly(row.alerted_at), testReadMode ? "처리 완료" : "미처리", testReadMode ? timeOnly(new Date()) : "-"]));
+      const lines = [["유형", "센서 ID", "설치 위치", "내용", "온도", "연기감지값", "불꽃 감지", "발생 시간", "처리 상태", "처리 시간"]];
+      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row), parseSmoke(row), parseFlame(row), timeOnly(row.alerted_at), testReadMode ? "처리 완료" : "미처리", testReadMode ? timeOnly(new Date()) : "-"]));
       if (selectedFormat === "pdf") {
         let bodyRows = "";
-        rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${String(row.bin_id).padStart(2, "0")}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row.alert_msg)}</td><td>${parseSmoke(row.alert_msg)}</td><td>${timeOnly(row.alerted_at)}</td><td>${testReadMode ? "처리 완료" : "미처리"}</td></tr>`; });
-        const html = `<html><head><title>FIDS 알림 기록</title><style>body{font-family:Arial,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}.danger{color:#dc2626;font-weight:700}</style></head><body><h2>FIDS 알림 기록</h2><table><thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기</th><th>발생 시간</th><th>처리 상태</th></tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+        rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${String(row.bin_id).padStart(2, "0")}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td>${testReadMode ? "처리 완료" : "미처리"}</td></tr>`; });
+        const html = `<html><head><title>FIDS 알림 기록</title><style>body{font-family:Arial,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}.danger{color:#dc2626;font-weight:700}</style></head><body><h2>FIDS 알림 기록</h2><table><thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기</th><th>불꽃</th><th>발생 시간</th><th>처리 상태</th></tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
         const popup = window.open("", "_blank"); popup.document.write(html); popup.document.close(); popup.print(); closeExportModal(); return;
       }
       if (selectedFormat === "excel") {

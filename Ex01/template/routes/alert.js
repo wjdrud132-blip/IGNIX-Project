@@ -9,7 +9,7 @@ router.get("/danger/latest", (req, res) => {
     SELECT
       b.bin_id,
       b.bin_loc,
-      '화재 위험 감지 - 즉각 대응 필요' AS alert_msg,
+      '온도 68.7 / 연기 감지값 350 / 불꽃 감지 1' AS alert_msg,
       NOW() AS alerted_at
     FROM t_trashbin b
     WHERE b.bin_id IN (1, 2, 3, 4)
@@ -48,9 +48,18 @@ router.get("/list", (req, res) => {
         ELSE 'normal'
       END AS alert_type,
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN '화재 위험 감지 - 즉각 대응 필요'
-        WHEN b.bin_id IN (5, 6, 7) THEN '온도 및 연기 임계값 초과'
-        ELSE '센서 상태 정상으로 복귀'
+        WHEN b.bin_id = 1 THEN '온도 68.7 / 연기 감지값 350 / 불꽃 감지 1'
+        WHEN b.bin_id = 2 THEN '온도 68.7 / 연기 감지값 350 / 불꽃 감지 1'
+        WHEN b.bin_id = 3 THEN '온도 66.4 / 연기 감지값 328 / 불꽃 감지 1'
+        WHEN b.bin_id = 4 THEN '온도 64.9 / 연기 감지값 305 / 불꽃 감지 1'
+        WHEN b.bin_id = 5 THEN '온도 45.2 / 연기 감지값 120 / 불꽃 감지 0'
+        WHEN b.bin_id = 6 THEN '온도 43.5 / 연기 감지값 110 / 불꽃 감지 0'
+        WHEN b.bin_id = 7 THEN '온도 44.8 / 연기 감지값 108 / 불꽃 감지 0'
+        WHEN b.bin_id = 8 THEN '온도 28.4 / 연기 감지값 12 / 불꽃 감지 0'
+        WHEN b.bin_id = 9 THEN '온도 29.1 / 연기 감지값 18 / 불꽃 감지 0'
+        WHEN b.bin_id = 10 THEN '온도 27.8 / 연기 감지값 9 / 불꽃 감지 0'
+        WHEN b.bin_id = 11 THEN '온도 30.2 / 연기 감지값 15 / 불꽃 감지 0'
+        ELSE '온도 26.9 / 연기 감지값 8 / 불꽃 감지 0'
       END AS alert_msg,
       DATE_ADD(COALESCE(DATE(b.installed_at), CURDATE()), INTERVAL (14 * 3600 + 30 * 60 + MOD(b.bin_id, 50)) SECOND) AS alerted_at,
       'N' AS is_received,

@@ -11,6 +11,16 @@ const defaultThresholds = Object.freeze({
   warningSmoke: 100,
 });
 
+const defaultSystemSettings = Object.freeze({
+  dataInterval: "10\uCD08",
+  reconnectDelay: "30\uCD08",
+  retryCount: "5\uD68C",
+  offlineAlert: "Y",
+  retentionPeriod: "90\uC77C",
+  autoDelete: "Y",
+  exportRange: "\uCD5C\uADFC 30\uC77C",
+});
+
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
     conn.query(sql, params, (err, rows) => {
@@ -71,6 +81,47 @@ async function getThresholds() {
   const rows = await query("SELECT * FROM t_fire_threshold WHERE id = 1");
   if (!rows.length) return defaultThresholds;
   return toClient(rows[0]);
+}
+
+async function ensureSystemSettingTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS t_system_setting (
+      setting_key VARCHAR(50) NOT NULL PRIMARY KEY,
+      setting_value VARCHAR(100) NOT NULL,
+      updated_by INT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  for (const [key, value] of Object.entries(defaultSystemSettings)) {
+    await query(
+      "INSERT IGNORE INTO t_system_setting (setting_key, setting_value) VALUES (?, ?)",
+      [key, value]
+    );
+  }
+}
+
+async function getSystemSettings() {
+  await ensureSystemSettingTable();
+  const rows = await query("SELECT setting_key, setting_value FROM t_system_setting");
+  const settings = { ...defaultSystemSettings };
+  rows.forEach((row) => {
+    settings[row.setting_key] = row.setting_value;
+  });
+  return settings;
+}
+
+async function saveSystemSettings(next, userId) {
+  await ensureSystemSettingTable();
+  for (const [key, value] of Object.entries(next)) {
+    await query(
+      `INSERT INTO t_system_setting (setting_key, setting_value, updated_by)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+      [key, String(value), userId]
+    );
+  }
+  return getSystemSettings();
 }
 
 router.get("/", requireLogin, (req, res) => {
@@ -139,6 +190,49 @@ router.post("/api/thresholds/reset", requireOperator, async (req, res) => {
   } catch (err) {
     console.error("임계값 초기화 실패:", err);
     res.status(500).json({ success: false, message: "임계값 초기화에 실패했습니다." });
+  }
+});
+
+router.get("/api/system", requireLogin, async (req, res) => {
+  try {
+    const settings = await getSystemSettings();
+    res.json({ success: true, settings });
+  } catch (err) {
+    console.error("system settings load failed:", err);
+    res.status(500).json({ success: false, message: "\uC124\uC815\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4." });
+  }
+});
+
+router.post("/api/system/network", requireLogin, async (req, res) => {
+  const next = {
+    dataInterval: req.body.dataInterval || defaultSystemSettings.dataInterval,
+    reconnectDelay: req.body.reconnectDelay || defaultSystemSettings.reconnectDelay,
+    retryCount: req.body.retryCount || defaultSystemSettings.retryCount,
+    offlineAlert: req.body.offlineAlert === "Y" ? "Y" : "N",
+  };
+
+  try {
+    const settings = await saveSystemSettings(next, req.session.user.user_id);
+    res.json({ success: true, settings, message: "\uB124\uD2B8\uC6CC\uD06C \uC124\uC815\uC774 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+  } catch (err) {
+    console.error("network settings save failed:", err);
+    res.status(500).json({ success: false, message: "\uB124\uD2B8\uC6CC\uD06C \uC124\uC815 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4." });
+  }
+});
+
+router.post("/api/system/data", requireLogin, async (req, res) => {
+  const next = {
+    retentionPeriod: req.body.retentionPeriod || defaultSystemSettings.retentionPeriod,
+    autoDelete: req.body.autoDelete === "Y" ? "Y" : "N",
+    exportRange: req.body.exportRange || defaultSystemSettings.exportRange,
+  };
+
+  try {
+    const settings = await saveSystemSettings(next, req.session.user.user_id);
+    res.json({ success: true, settings, message: "\uB370\uC774\uD130 \uAD00\uB9AC \uC124\uC815\uC774 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+  } catch (err) {
+    console.error("data settings save failed:", err);
+    res.status(500).json({ success: false, message: "\uB370\uC774\uD130 \uAD00\uB9AC \uC124\uC815 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4." });
   }
 });
 

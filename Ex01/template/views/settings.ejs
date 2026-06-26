@@ -170,32 +170,33 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
 
       <div class="set-content" id="setContent">
         <div class="panel" id="section-threshold">
-          <div class="panel-header"><div class="panel-icon red"><i class="ti ti-flame"></i></div><div style="flex:1;"><div class="panel-title">화재 감지 임계값</div><div class="panel-sub">센서 경보 발생 기준 온도 및 연기 감지값을 설정합니다.</div></div><span class="badge" id="roleBadge"><i class="ti ti-lock"></i>권한 확인 중</span></div>
+          <div class="panel-header"><div class="panel-icon red"><i class="ti ti-flame"></i></div><div style="flex:1;"><div class="panel-title">화재 감지 임계값</div><div class="panel-sub">센서 경보 발생 기준 온도와 연기 감지값을 설정하고, 불꽃 감지 상태값 기준을 확인합니다.</div></div><span class="badge" id="roleBadge"><i class="ti ti-lock"></i>권한 확인 중</span></div>
           <div class="row"><div class="row-left"><div class="row-label">위험 온도 임계값</div><div class="row-sub">이 온도 이상이면 즉시 화재 위험 경보가 발생합니다.</div></div><div class="row-right"><input id="dangerTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1"><span style="font-size:13px;color:#888;">°C</span></div></div>
           <div class="row"><div class="row-left"><div class="row-label">주의 온도 임계값</div><div class="row-sub">이 온도 이상이면 주의 경보가 발생합니다.</div></div><div class="row-right"><input id="warningTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1"><span style="font-size:13px;color:#888;">°C</span></div></div>
           <div class="row"><div class="row-left"><div class="row-label">위험 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 즉시 화재 위험 경보가 발생합니다.</div></div><div class="row-right"><input id="dangerSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1"><span style="font-size:13px;color:#888;">ppm</span></div></div>
           <div class="row"><div class="row-left"><div class="row-label">주의 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 주의 경보가 발생합니다.</div></div><div class="row-right"><input id="warningSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1"><span style="font-size:13px;color:#888;">ppm</span></div></div>
+          <div class="row"><div class="row-left"><div class="row-label">불꽃 감지 상태값</div><div class="row-sub">불꽃 센서는 임계값이 아니라 0/1 상태로 판단합니다.</div></div><div class="row-right"><span class="badge danger">1 = 불꽃 발생</span><span class="badge ok">0 = 불꽃 없음</span></div></div>
           <div class="info-box" id="permissionBox"><i class="ti ti-info-circle"></i><div id="permissionText">권한을 확인하는 중입니다.</div></div>
           <div class="save-bar" id="operatorActions"><button class="btn" type="button" onclick="resetThresholds()"><i class="ti ti-rotate-clockwise"></i>초기화</button><button class="btn blue" type="button" onclick="saveThresholds()"><i class="ti ti-device-floppy"></i>저장</button></div>
         </div>
 
         <div class="panel" id="section-network">
           <div class="panel-header"><div class="panel-icon blue"><i class="ti ti-wifi"></i></div><div><div class="panel-title">네트워크 / 센서 통신</div><div class="panel-sub">Wi-Fi 연결 및 데이터 전송 기준을 확인합니다.</div></div></div>
-          <div class="grid3"><div class="field-group"><div class="field-label">데이터 전송 주기</div><select class="select-field" style="width:100%"><option selected>10초</option><option>30초</option><option>1분</option></select></div><div class="field-group"><div class="field-label">Wi-Fi 재연결 대기</div><select class="select-field" style="width:100%"><option>10초</option><option selected>30초</option><option>1분</option></select></div><div class="field-group"><div class="field-label">연결 시도 횟수</div><select class="select-field" style="width:100%"><option>3회</option><option selected>5회</option><option>10회</option></select></div></div>
+          <div class="grid3"><div class="field-group"><div class="field-label">데이터 전송 주기</div><select id="dataInterval" class="select-field" style="width:100%"><option>10초</option><option>30초</option><option>1분</option></select></div><div class="field-group"><div class="field-label">Wi-Fi 재연결 대기</div><select id="reconnectDelay" class="select-field" style="width:100%"><option>10초</option><option>30초</option><option>1분</option></select></div><div class="field-group"><div class="field-label">연결 시도 횟수</div><select id="retryCount" class="select-field" style="width:100%"><option>3회</option><option>5회</option><option>10회</option></select></div></div>
           <div class="row"><div class="row-left"><div class="row-label">오프라인 센서 자동 알림</div><div class="row-sub">연결 끊김 발생 시 즉시 알림을 발송합니다.</div></div><div class="row-right"><div class="toggle-wrap"><div id="offlineAlertToggle" class="toggle on" onclick="toggleSwitch('offlineAlertToggle','offlineAlertLabel')"><div class="toggle-dot"></div></div><span id="offlineAlertLabel" class="toggle-label">활성</span></div></div></div>
           <div class="row"><div class="row-left"><div class="row-label">현재 서버 상태</div><div class="row-sub">마지막 확인: <span id="serverCheckTime">-</span></div></div><div class="row-right"><span class="badge ok"><i class="ti ti-circle-check"></i>정상 운영</span><button class="btn" type="button" onclick="setServerCheckTime()"><i class="ti ti-refresh"></i>재연결 테스트</button></div></div>
           <div class="info-box"><i class="ti ti-info-circle"></i>데이터 전송 주기를 짧게 설정할수록 실시간성은 높아지지만 센서 배터리 소모가 증가할 수 있습니다.</div>
-          <div class="save-bar"><button class="btn blue" type="button"><i class="ti ti-device-floppy"></i>저장</button></div>
+          <div class="save-bar"><button class="btn blue" type="button" onclick="saveNetworkSettings()"><i class="ti ti-device-floppy"></i>저장</button></div>
         </div>
 
         <div class="panel" id="section-data">
           <div class="panel-header"><div class="panel-icon purple"><i class="ti ti-database"></i></div><div><div class="panel-title">데이터 관리</div><div class="panel-sub">센서 데이터 보관 기간 및 내보내기 기준을 설정합니다.</div></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">데이터 보관 기간</div><div class="row-sub">설정 기간 이후 데이터는 자동 정리 대상으로 분류됩니다.</div></div><div class="row-right"><select class="select-field"><option>30일</option><option selected>90일</option><option>180일</option><option>1년</option><option>무제한</option></select></div></div>
+          <div class="row"><div class="row-left"><div class="row-label">데이터 보관 기간</div><div class="row-sub">설정 기간 이후 데이터는 자동 정리 대상으로 분류됩니다.</div></div><div class="row-right"><select id="retentionPeriod" class="select-field"><option>30일</option><option>90일</option><option>180일</option><option>1년</option><option>무제한</option></select></div></div>
           <div class="row"><div class="row-left"><div class="row-label">오래된 데이터 자동 삭제</div><div class="row-sub">보관 기간을 초과한 데이터를 자동으로 삭제합니다.</div></div><div class="row-right"><div class="toggle-wrap"><div id="autoDeleteToggle" class="toggle on" onclick="toggleSwitch('autoDeleteToggle','autoDeleteLabel')"><div class="toggle-dot"></div></div><span id="autoDeleteLabel" class="toggle-label">활성</span></div></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">데이터 내보내기</div><div class="row-sub">저장된 센서 데이터를 CSV 파일로 내려받습니다.</div></div><div class="row-right"><select class="select-field"><option>최근 7일</option><option selected>최근 30일</option><option>최근 90일</option><option>전체</option></select><button class="btn"><i class="ti ti-download"></i>CSV 내보내기</button></div></div>
+          <div class="row"><div class="row-left"><div class="row-label">데이터 내보내기</div><div class="row-sub">저장된 센서 데이터를 CSV 파일로 내려받습니다.</div></div><div class="row-right"><select id="exportRange" class="select-field"><option>최근 7일</option><option>최근 30일</option><option>최근 90일</option><option>전체</option></select><button class="btn" type="button" onclick="exportSettingsCsv()"><i class="ti ti-download"></i>CSV 내보내기</button></div></div>
           <div class="row operator-only" id="resetDataRow"><div class="row-left"><div class="row-label" style="color:#dc2626;">전체 데이터 초기화</div><div class="row-sub">저장된 모든 센서 데이터를 삭제합니다. 운영자만 사용할 수 있습니다.</div></div><div class="row-right"><button class="btn red"><i class="ti ti-trash"></i>데이터 초기화</button></div></div>
           <div class="info-box"><i class="ti ti-info-circle"></i>데이터 보관 기간은 운영 정책에 맞게 조정하세요. 전체 데이터 초기화는 운영자 화면에서만 보입니다.</div>
-          <div class="save-bar"><button class="btn blue" type="button"><i class="ti ti-device-floppy"></i>저장</button></div>
+          <div class="save-bar"><button class="btn blue" type="button" onclick="saveDataSettings()"><i class="ti ti-device-floppy"></i>저장</button></div>
         </div>
 
         <div class="panel" id="section-account">
@@ -301,6 +302,91 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
       const result = await res.json();
       alert(result.message || (result.success ? "초기화되었습니다." : "초기화에 실패했습니다."));
       if (result.success) fillThresholds(result.thresholds);
+    }
+
+    function setSelectValue(id, value){
+      const el = document.getElementById(id);
+      if (!el) return;
+      const option = Array.from(el.options).find((item) => item.value === value || item.textContent === value);
+      if (option) el.value = option.value;
+    }
+
+    function setToggleValue(toggleId, labelId, enabled){
+      const toggle = document.getElementById(toggleId);
+      const label = document.getElementById(labelId);
+      if (!toggle || !label) return;
+      toggle.classList.toggle("on", enabled);
+      label.textContent = enabled ? "활성" : "비활성";
+    }
+
+    function isToggleOn(id){
+      const el = document.getElementById(id);
+      return el && el.classList.contains("on") ? "Y" : "N";
+    }
+
+    function applySystemSettings(settings){
+      if (!settings) return;
+      setSelectValue("dataInterval", settings.dataInterval);
+      setSelectValue("reconnectDelay", settings.reconnectDelay);
+      setSelectValue("retryCount", settings.retryCount);
+      setToggleValue("offlineAlertToggle", "offlineAlertLabel", settings.offlineAlert === "Y");
+      setSelectValue("retentionPeriod", settings.retentionPeriod);
+      setToggleValue("autoDeleteToggle", "autoDeleteLabel", settings.autoDelete === "Y");
+      setSelectValue("exportRange", settings.exportRange);
+    }
+
+    async function loadSystemSettings(){
+      const res = await fetch("/settings/api/system");
+      const result = await res.json();
+      if (!result.success) return alert(result.message || "설정을 불러오지 못했습니다.");
+      applySystemSettings(result.settings);
+    }
+
+    async function saveNetworkSettings(){
+      const body = {
+        dataInterval: document.getElementById("dataInterval").value,
+        reconnectDelay: document.getElementById("reconnectDelay").value,
+        retryCount: document.getElementById("retryCount").value,
+        offlineAlert: isToggleOn("offlineAlertToggle"),
+      };
+      const res = await fetch("/settings/api/system/network", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const result = await res.json();
+      alert(result.message || (result.success ? "저장되었습니다." : "저장에 실패했습니다."));
+      if (result.success) applySystemSettings(result.settings);
+    }
+
+    async function saveDataSettings(){
+      const body = {
+        retentionPeriod: document.getElementById("retentionPeriod").value,
+        autoDelete: isToggleOn("autoDeleteToggle"),
+        exportRange: document.getElementById("exportRange").value,
+      };
+      const res = await fetch("/settings/api/system/data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const result = await res.json();
+      alert(result.message || (result.success ? "저장되었습니다." : "저장에 실패했습니다."));
+      if (result.success) applySystemSettings(result.settings);
+    }
+
+    function exportSettingsCsv(){
+      const rows = [
+        ["항목", "값"],
+        ["데이터 전송 주기", document.getElementById("dataInterval").value],
+        ["Wi-Fi 재연결 대기", document.getElementById("reconnectDelay").value],
+        ["연결 시도 횟수", document.getElementById("retryCount").value],
+        ["오프라인 센서 자동 알림", isToggleOn("offlineAlertToggle") === "Y" ? "활성" : "비활성"],
+        ["데이터 보관 기간", document.getElementById("retentionPeriod").value],
+        ["오래된 데이터 자동 삭제", isToggleOn("autoDeleteToggle") === "Y" ? "활성" : "비활성"],
+        ["내보내기 범위", document.getElementById("exportRange").value],
+      ];
+      const csv = "\ufeff" + rows.map((row) => row.map((cell) => "\"" + String(cell).replace(/"/g, "\"\"") + "\"").join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "fids_settings.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
     }
 
     async function loadProfile(){
@@ -450,6 +536,7 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
     setInterval(setNowText, 1000);
     applyPermission();
     loadThresholds();
+    loadSystemSettings();
     loadProfile();
   </script>  <script src="/js/fire-alert.js"></script>
 
