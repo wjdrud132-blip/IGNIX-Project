@@ -93,15 +93,15 @@ router.patch("/trash/:bin_id/restore", (req, res) => {
     [bin_id],
     (err, result) => {
       if (err) {
-        console.error("\uD734\uC9C0\uD1B5 \uBCF5\uAD6C \uC2E4\uD328:", err);
-        return res.status(500).json({ message: "\uBCF5\uAD6C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4." });
+        console.error("??? ?? ??:", err);
+        return res.status(500).json({ message: "?? ??" });
       }
 
       if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "\uBCF5\uAD6C\uD560 \uC4F0\uB808\uAE30\uD1B5\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4." });
+        return res.status(404).json({ message: "??? ????? ?? ? ????." });
       }
 
-      res.json({ message: "\uC4F0\uB808\uAE30\uD1B5\uC774 \uBCF5\uAD6C\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+      res.json({ message: "????? ???????." });
     }
   );
 });

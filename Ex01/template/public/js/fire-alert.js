@@ -92,6 +92,23 @@ function showDangerModal(alert) {
   });
 
   overlay.querySelector(".fire-move-btn").addEventListener("click", () => {
+    if (alert.alert_id) {
+      lastAlertId = alert.alert_id;
+      sessionStorage.setItem("lastShownAlertId", alert.alert_id);
+    }
+
+    overlay.remove();
+
+    if (location.pathname === "/dashboard") {
+      const target = document.getElementById("bin-" + alert.bin_id);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("focus-bin");
+        setTimeout(() => target.classList.remove("focus-bin"), 2500);
+        return;
+      }
+    }
+
     location.href = "/dashboard?bin_id=" + alert.bin_id;
   });
 }
@@ -120,5 +137,5 @@ function formatDate(value) {
   });
 }
 
-rememberCurrentDangerAlert();
+checkDangerAlert();
 setInterval(checkDangerAlert, 10000);

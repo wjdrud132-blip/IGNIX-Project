@@ -3,6 +3,8 @@ const router = express.Router();
 const conn = require("../config/db");
 
 const emailCodes = {};
+const passwordResetCodes = {};
+const passwordResetVerified = {};
 
 function ensureManagerOrgColumn(callback) {
   conn.query("ALTER TABLE t_manager ADD COLUMN mgr_org VARCHAR(100) NULL", (err) => {
@@ -43,6 +45,81 @@ router.post("/email/check", (req, res) => {
   }
 
   res.send("인증번호가 일치하지 않습니다.");
+});
+
+
+router.post("/password/send-code", (req, res) => {
+  const { mgr_email } = req.body;
+  if (!mgr_email) {
+    return res.json({ success: false, message: "\uC774\uBA54\uC77C\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694." });
+  }
+
+  const email = mgr_email.trim();
+  conn.query("SELECT mgr_id FROM t_manager WHERE mgr_email = ?", [email], (err, rows) => {
+    if (err) {
+      console.error("password reset account lookup failed:", err);
+      return res.status(500).json({ success: false, message: "\uC11C\uBC84 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4." });
+    }
+
+    if (!rows.length) {
+      return res.json({ success: false, message: "\uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uACC4\uC815\uC785\uB2C8\uB2E4." });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    passwordResetCodes[email] = code;
+    passwordResetVerified[email] = false;
+
+    console.log("[\uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30] \uC774\uBA54\uC77C:", email);
+    console.log("[\uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30] \uC778\uC99D\uBC88\uD638:", code);
+
+    res.json({ success: true, message: "\uC778\uC99D\uBC88\uD638\uAC00 \uBC1C\uC1A1\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+  });
+});
+
+router.post("/password/verify-code", (req, res) => {
+  const { mgr_email, code } = req.body;
+  if (!mgr_email || !code) {
+    return res.json({ success: false, message: "\uC774\uBA54\uC77C\uACFC \uC778\uC99D\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694." });
+  }
+
+  const email = mgr_email.trim();
+  const inputCode = String(code).trim();
+  if (passwordResetCodes[email] !== inputCode) {
+    return res.json({ success: false, message: "\uC778\uC99D\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4." });
+  }
+
+  passwordResetVerified[email] = true;
+  res.json({ success: true, message: "\uC774\uBA54\uC77C \uC778\uC99D\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+});
+
+router.post("/password/reset", (req, res) => {
+  const { mgr_email, mgr_pw } = req.body;
+  if (!mgr_email || !mgr_pw) {
+    return res.json({ success: false, message: "\uC774\uBA54\uC77C\uACFC \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694." });
+  }
+
+  const email = mgr_email.trim();
+  const password = String(mgr_pw).trim();
+  if (!passwordResetVerified[email]) {
+    return res.json({ success: false, message: "\uC774\uBA54\uC77C \uC778\uC99D\uC744 \uBA3C\uC800 \uC644\uB8CC\uD574\uC8FC\uC138\uC694." });
+  }
+  if (password.length < 8) {
+    return res.json({ success: false, message: "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1\uC73C\uB85C \uC785\uB825\uD574\uC8FC\uC138\uC694." });
+  }
+
+  conn.query("UPDATE t_manager SET mgr_pw = ? WHERE mgr_email = ?", [password, email], (err, result) => {
+    if (err) {
+      console.error("password reset failed:", err);
+      return res.status(500).json({ success: false, message: "\uBE44\uBC00\uBC88\uD638 \uC7AC\uC124\uC815\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4." });
+    }
+    if (result.affectedRows === 0) {
+      return res.json({ success: false, message: "\uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uACC4\uC815\uC785\uB2C8\uB2E4." });
+    }
+
+    delete passwordResetCodes[email];
+    delete passwordResetVerified[email];
+    res.json({ success: true, message: "\uBE44\uBC00\uBC88\uD638\uAC00 \uC7AC\uC124\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4." });
+  });
 });
 
 router.get("/test", (req, res) => {

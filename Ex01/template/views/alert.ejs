@@ -175,7 +175,6 @@
       <div class="topbar-title">알림 기록</div>
       <div class="topbar-right">
         <i class="ti ti-calendar"></i><span id="nowText"></span>
-        <button class="btn" type="button" onclick="openExportModal()"><i class="ti ti-download"></i>내보내기</button>
         <div class="alert-area"><button class="alert-button" id="topbarAlertButton" type="button" title="알림"><i class="ti ti-bell"></i><span class="alert-dot" id="topbarAlertDot"></span></button><div class="alert-dropdown" id="topbarAlertDropdown"><div class="alert-head"><strong>알림</strong><button type="button" id="topbarReadAllBtn">모두 읽음</button></div><div class="alert-list" id="topbarAlertList"></div><button class="alert-more" type="button" id="topbarOpenAllAlertsBtn">전체 알림 보기 →</button></div></div>
       </div>
     </div>
@@ -247,6 +246,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     let monthChart = null;
     let selectedFormat = "csv";
     let testReadMode = false;
+    let testReadAt = null;
 
     const role = sessionStorage.getItem("role");
     const mgrName = sessionStorage.getItem("mgr_name");
@@ -331,7 +331,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
         const isRead = testReadMode;
         const trClass = isRead ? "read-row" : row.alert_type === "danger" ? "danger-row" : row.alert_type === "warning" ? "warning-row" : "";
         const badgeClass = isRead ? "read" : row.alert_type;
-        return `<tr class="${trClass}"><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead ? timeOnly(new Date()) : "-"}</td></tr>`;
+        return `<tr class="${trClass}"><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead && testReadAt ? timeOnly(testReadAt) : "-"}</td></tr>`;
       }).join("");
       const end = Math.min(start + pageLimit, rows.length);
       $("pagerInfo").textContent = rows.length ? `총 ${rows.length}건 중 ${start + 1}-${end}건 표시` : "총 0건";
@@ -399,7 +399,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function applyFilters() { currentPage = 1; renderTable(); }
     function goPage(page) { currentPage = page; renderTable(); }
-    function markAllRead() { testReadMode = true; renderTable(); }
+    function markAllRead() { if (!testReadMode) { testReadMode = true; testReadAt = new Date(); } renderTable(); }
     function openExportModal() { $("exportModal").classList.add("open"); }
     function closeExportModal() { $("exportModal").classList.remove("open"); }
     function selectExportFormat(format) { selectedFormat = format; document.querySelectorAll(".option-btn").forEach((button) => button.classList.toggle("active", button.dataset.format === format)); }
@@ -423,7 +423,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function exportAlerts() {
       const rows = exportRows();
       const lines = [["유형", "센서 ID", "설치 위치", "내용", "온도", "연기감지값", "불꽃 감지", "발생 시간", "처리 상태", "처리 시간"]];
-      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row), parseSmoke(row), parseFlame(row), timeOnly(row.alerted_at), testReadMode ? "처리 완료" : "미처리", testReadMode ? timeOnly(new Date()) : "-"]));
+      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row), parseSmoke(row), parseFlame(row), timeOnly(row.alerted_at), testReadMode ? "처리 완료" : "미처리", testReadMode && testReadAt ? timeOnly(testReadAt) : "-"]));
       if (selectedFormat === "pdf") {
         let bodyRows = "";
         rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${String(row.bin_id).padStart(2, "0")}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td>${testReadMode ? "처리 완료" : "미처리"}</td></tr>`; });
@@ -447,6 +447,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       const result = await response.json();
       alertRows = result.rows || [];
       testReadMode = false;
+      testReadAt = null;
       renderStats();
       renderMonthChart();
       renderFrequency();

@@ -58,6 +58,10 @@ app.get("/pending", (req, res) => {
   res.render("pending");
 });
 
+app.get("/find-password", (req, res) => {
+  res.render("find-password");
+});
+
 app.get("/login", (req, res) => {
   res.render("login");
 });

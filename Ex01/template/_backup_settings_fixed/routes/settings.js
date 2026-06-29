@@ -308,61 +308,6 @@ router.post("/api/profile", requireLogin, async (req, res) => {
   }
 });
 
-router.post("/api/data/reset", requireOperator, async (req, res) => {
-  const excludeTypes = Array.isArray(req.body.excludeTypes) ? req.body.excludeTypes : [];
-  const allowedTypes = ["danger", "warning", "normal"];
-  const resetTypes = allowedTypes.filter((type) => !excludeTypes.includes(type));
-
-  if (resetTypes.length === 0) {
-    return res.json({
-      success: true,
-      deletedCount: 0,
-      deletedAlerts: 0,
-      deletedSensors: 0,
-      deletedTrashbins: 0,
-      message: "\uC81C\uC678\uD560 \uB370\uC774\uD130\uB9CC \uC120\uD0DD\uB418\uC5B4 \uCD08\uAE30\uD654\uD560 \uD56D\uBAA9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-    });
-  }
-
-  const typeConditions = [];
-  if (resetTypes.includes("danger")) typeConditions.push("bin_id IN (1, 2, 3, 4)");
-  if (resetTypes.includes("warning")) typeConditions.push("bin_id IN (5, 6, 7)");
-  if (resetTypes.includes("normal")) typeConditions.push("bin_id NOT IN (1, 2, 3, 4, 5, 6, 7)");
-  const whereByType = "(" + typeConditions.join(" OR ") + ")";
-
-  try {
-    await query("START TRANSACTION");
-    const alertResult = await query("DELETE FROM t_alert WHERE " + whereByType);
-    let sensorResult = { affectedRows: 0 };
-    try {
-      sensorResult = await query("DELETE FROM sensor_data WHERE " + whereByType);
-    } catch (sensorErr) {
-      if (sensorErr.code !== "ER_NO_SUCH_TABLE") throw sensorErr;
-    }
-    const trashbinResult = await query("DELETE FROM t_trashbin WHERE " + whereByType);
-    await query("COMMIT");
-
-    const deletedAlerts = alertResult.affectedRows || 0;
-    const deletedSensors = sensorResult.affectedRows || 0;
-    const deletedTrashbins = trashbinResult.affectedRows || 0;
-    res.json({
-      success: true,
-      deletedCount: deletedAlerts + deletedSensors + deletedTrashbins,
-      deletedAlerts,
-      deletedSensors,
-      deletedTrashbins,
-      message: "\uC6B4\uC601 \uB370\uC774\uD130\uAC00 \uCD08\uAE30\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (err) {
-    try { await query("ROLLBACK"); } catch (rollbackErr) { console.error("data reset rollback failed:", rollbackErr); }
-    console.error("data reset failed:", err);
-    res.status(500).json({
-      success: false,
-      message: "\uB370\uC774\uD130 \uCD08\uAE30\uD654\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."
-    });
-  }
-});
-
 router.get("/api/export/trashbins", (req, res) => {
   const sql = `
     SELECT
