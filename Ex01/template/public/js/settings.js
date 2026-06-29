@@ -1,4 +1,4 @@
-const serverUser = window.__FIDS_USER__ || {};
+﻿const serverUser = window.__FIDS_USER__ || {};
 const role = serverUser.role || sessionStorage.getItem("role") || "manager";
 const canEditThreshold = role === "operator";
 const thresholdIds = ["dangerTemp", "warningTemp", "dangerSmoke", "warningSmoke"];
@@ -60,17 +60,16 @@ function applyPermission() {
     badge.className = "badge operator";
     badge.innerHTML = '<i class="ti ti-shield-check"></i>운영자 변경 가능';
     box.classList.remove("readonly-note");
-    text.textContent = "운영자 계정은 화재 감지 임계값을 변경하거나 기본값으로 초기화할 수 있습니다.";
+    text.textContent = "운영자 계정은 화재 감지 임계값과 AI 판단 사용 여부를 변경할 수 있습니다.";
     actions.style.display = "flex";
   } else {
     badge.className = "badge lock";
     badge.innerHTML = '<i class="ti ti-lock"></i>읽기 전용';
     box.classList.add("readonly-note");
-    text.textContent = "일반 관리자 계정은 운영자가 정한 임계값만 확인할 수 있습니다. 변경과 초기화는 운영자만 가능합니다.";
+    text.textContent = "일반 관리자는 운영자가 정한 설정값만 확인할 수 있습니다.";
     actions.style.display = "none";
   }
 }
-
 function fillThresholds(data) {
   if (!data) return;
   document.getElementById("dangerTemp").value = data.dangerTemp ?? "";
@@ -95,16 +94,31 @@ async function saveThresholds() {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  alert(result.message || (result.success ? "저장되었습니다." : "저장에 실패했습니다."));
-  if (result.success) fillThresholds(result.thresholds);
-}
 
+  if (!result.success) {
+    return alert(result.message || "저장에 실패했습니다.");
+  }
+
+  const systemRes = await fetch("/settings/api/system/data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      exportRange: document.getElementById("exportRange")?.value || "전체",
+      aiJudge: isToggleOn("aiJudgeToggle"),
+    }),
+  });
+  const systemResult = await systemRes.json();
+
+  fillThresholds(result.thresholds);
+  if (systemResult.success) applySystemSettings(systemResult.settings);
+  alert(systemResult.success ? "설정이 저장되었습니다." : (systemResult.message || "AI 설정 저장에 실패했습니다."));
+}
 async function resetThresholds() {
-  if (!canEditThreshold) return alert("운영자만 초기화할 수 있습니다.");
-  if (!confirm("화재 감지 임계값을 기본값으로 초기화할까요?")) return;
+  if (!canEditThreshold) return alert("?댁쁺?먮쭔 珥덇린?뷀븷 ???덉뒿?덈떎.");
+  if (!confirm("?붿옱 媛먯? ?꾧퀎媛믪쓣 湲곕낯媛믪쑝濡?珥덇린?뷀븷源뚯슂?")) return;
   const res = await fetch("/settings/api/thresholds/reset", { method: "POST" });
   const result = await res.json();
-  alert(result.message || (result.success ? "초기화되었습니다." : "초기화에 실패했습니다."));
+  alert(result.message || (result.success ? "珥덇린?붾릺?덉뒿?덈떎." : "珥덇린?붿뿉 ?ㅽ뙣?덉뒿?덈떎."));
   if (result.success) fillThresholds(result.thresholds);
 }
 
@@ -122,7 +136,6 @@ function setToggleValue(toggleId, labelId, enabled) {
   toggle.classList.toggle("on", enabled);
   label.textContent = enabled ? "활성" : "비활성";
 }
-
 function isToggleOn(id) {
   const el = document.getElementById(id);
   return el && el.classList.contains("on") ? "Y" : "N";
@@ -135,6 +148,7 @@ function applySystemSettings(settings) {
   setSelectValue("retryCount", settings.retryCount);
   setToggleValue("offlineAlertToggle", "offlineAlertLabel", settings.offlineAlert === "Y");
   setSelectValue("exportRange", settings.exportRange);
+  setToggleValue("aiJudgeToggle", "aiJudgeLabel", settings.aiJudge !== "N");
 }
 
 async function loadSystemSettings() {
@@ -147,6 +161,7 @@ async function loadSystemSettings() {
 async function saveDataSettings() {
   const body = {
     exportRange: document.getElementById("exportRange")?.value || "전체",
+    aiJudge: isToggleOn("aiJudgeToggle"),
   };
   const res = await fetch("/settings/api/system/data", {
     method: "POST",
@@ -230,7 +245,7 @@ async function collectExportRows() {
 
 async function exportData(format) {
   const rows = await collectExportRows();
-  const lines = [["구분", "ID", "위치", "내용", "상태", "시간"], ...rows.map((row) => [row.type, row.id, row.location, row.content, row.status, row.date])];
+  const lines = [["援щ텇", "ID", "?꾩튂", "?댁슜", "?곹깭", "?쒓컙"], ...rows.map((row) => [row.type, row.id, row.location, row.content, row.status, row.date])];
 
   if (format === "pdf") {
     const summary = rows.reduce((acc, row) => {
@@ -389,10 +404,10 @@ async function restoreTrashbin(binId) {
 }
 
 async function deleteTrashPermanently(binId) {
-  if (!confirm("휴지통에서도 삭제하면 DB에서 완전히 삭제됩니다. 계속할까요?")) return;
+  if (!confirm("?댁??듭뿉?쒕룄 ??젣?섎㈃ DB?먯꽌 ?꾩쟾????젣?⑸땲?? 怨꾩냽?좉퉴??")) return;
   const res = await fetch("/trashbins/trash/" + binId, { method: "DELETE" });
   const result = await res.json();
-  alert(result.message || (res.ok ? "완전히 삭제되었습니다." : "삭제에 실패했습니다."));
+  alert(result.message || (res.ok ? "?꾩쟾????젣?섏뿀?듬땲??" : "??젣???ㅽ뙣?덉뒿?덈떎."));
   await loadTrashList();
 }
 
@@ -452,11 +467,10 @@ async function loadProfile() {
   document.getElementById("accountRole").value = profile.role === "operator" ? "운영자" : "일반 관리자";
   document.getElementById("approvalStatus").value = Number(profile.is_approved) === 1 ? "승인 완료" : "승인 대기";
 }
-
 async function saveProfile() {
   const nextEmail = document.getElementById("profileEmail").value.trim();
   if (role !== "operator" && originalProfileEmail && originalProfileEmail !== nextEmail) {
-    if (!confirm("이메일을 변경하면 다시 관리자 승인이 필요합니다. 계속할까요?")) return;
+    if (!confirm("?대찓?쇱쓣 蹂寃쏀븯硫??ㅼ떆 愿由ъ옄 ?뱀씤???꾩슂?⑸땲?? 怨꾩냽?좉퉴??")) return;
   }
   const body = {
     mgr_name: document.getElementById("profileName").value,
@@ -470,7 +484,7 @@ async function saveProfile() {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  alert(result.message || (result.success ? "저장되었습니다." : "저장에 실패했습니다."));
+  alert(result.message || (result.success ? "??λ릺?덉뒿?덈떎." : "??μ뿉 ?ㅽ뙣?덉뒿?덈떎."));
   if (!result.success) return;
   if (result.requiresApproval) {
     sessionStorage.clear();
@@ -509,7 +523,7 @@ function syncActiveNavByScroll() {
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await fetch("/manager/logout", { method: "POST" });
   sessionStorage.clear();
-  alert("로그아웃되었습니다.");
+  alert("濡쒓렇?꾩썐?섏뿀?듬땲??");
   location.replace("/");
 });
 document.getElementById("setContent").addEventListener("scroll", syncActiveNavByScroll);
@@ -541,21 +555,21 @@ function renderTopbarAlerts() {
   if (topbarAlertDot) topbarAlertDot.classList.toggle("hide", !unreadDanger);
   if (!topbarAlertList || !topbarAllAlertList) return;
   if (!dangerAlerts.length) {
-    topbarAlertList.innerHTML = '<div class="alert-empty">위험 알림이 없습니다.</div>';
-    topbarAllAlertList.innerHTML = '<div class="alert-empty">위험 알림이 없습니다.</div>';
+    topbarAlertList.innerHTML = '<div class="alert-empty">?꾪뿕 ?뚮┝???놁뒿?덈떎.</div>';
+    topbarAllAlertList.innerHTML = '<div class="alert-empty">?꾪뿕 ?뚮┝???놁뒿?덈떎.</div>';
     return;
   }
   topbarAlertList.innerHTML = dangerAlerts.slice(0, 5).map((item) =>
     '<div class="alert-item danger ' + (item.is_received === "Y" ? "read" : "") + '">' +
       '<div class="alert-icon"><i class="ti ti-flame"></i></div>' +
-      '<div class="alert-text"><strong>위험 감지</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span><small>' + (item.alert_msg || "화재 위험 감지") + '</small></div>' +
+      '<div class="alert-text"><strong>?꾪뿕 媛먯?</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span><small>' + (item.alert_msg || "?붿옱 ?꾪뿕 媛먯?") + '</small></div>' +
       '<span class="alert-time">' + topbarAlertTime(item.alerted_at) + '</span>' +
     '</div>'
   ).join("");
   topbarAllAlertList.innerHTML = dangerAlerts.map((item) =>
     '<div class="all-alert-row danger ' + (item.is_received === "Y" ? "read" : "") + '">' +
-      '<div><strong>위험 감지</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span></div>' +
-      '<p>' + (item.alert_msg || "화재 위험 감지") + '</p>' +
+      '<div><strong>?꾪뿕 媛먯?</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span></div>' +
+      '<p>' + (item.alert_msg || "?붿옱 ?꾪뿕 媛먯?") + '</p>' +
       '<time>' + topbarAlertTime(item.alerted_at) + '</time>' +
     '</div>'
   ).join("");
@@ -603,3 +617,11 @@ applyPermission();
 loadThresholds();
 loadSystemSettings();
 loadProfile();
+
+
+
+
+
+
+
+

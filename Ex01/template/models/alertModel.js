@@ -1,4 +1,4 @@
-﻿const conn = require("../config/db");
+const conn = require("../config/db");
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -16,31 +16,28 @@ function query(sql, params = []) {
 async function getLogs() {
   const sql = `
     SELECT
-      b.bin_id AS alert_id,
-      b.bin_id,
-      CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN 'danger'
-        WHEN b.bin_id IN (5, 6, 7) THEN 'warning'
-        ELSE 'normal'
-      END AS alert_type,
-      CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN '화재 위험 감지 - 즉각 대응 필요'
-        WHEN b.bin_id IN (5, 6, 7) THEN '온도 및 연기 임계값 초과'
-        ELSE '센서 상태 정상으로 복귀'
-      END AS alert_msg,
-      DATE_ADD(COALESCE(DATE(b.installed_at), CURDATE()), INTERVAL (14 * 3600 + 30 * 60 + MOD(b.bin_id, 50)) SECOND) AS alerted_at,
-      'N' AS is_received,
-      NULL AS received_at,
+      a.alert_id,
+      a.bin_id,
+      a.alert_type,
+      a.alert_msg,
+      a.alerted_at,
+      a.is_received,
+      a.received_at,
       b.bin_loc,
       b.installed_at
-    FROM t_trashbin b
+    FROM t_alert a
+    LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
+    WHERE b.network_status IS NULL OR b.network_status <> 9
     ORDER BY
-      CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN 1
-        WHEN b.bin_id IN (5, 6, 7) THEN 2
-        ELSE 3
+      CASE a.alert_type
+        WHEN 'danger' THEN 1
+        WHEN 'warning' THEN 2
+        WHEN 'normal' THEN 3
+        ELSE 4
       END,
-      b.bin_id ASC
+      a.alerted_at DESC,
+      a.bin_id ASC,
+      a.alert_id DESC
   `;
 
   return await query(sql);
@@ -58,7 +55,18 @@ async function getStats() {
 }
 
 async function markAllRead() {
-  return { changedRows: 0 };
+  const sql = `
+    UPDATE t_alert
+    SET
+      is_received = 'Y',
+      received_at = CASE
+        WHEN is_received = 'Y' THEN received_at
+        ELSE NOW()
+      END
+    WHERE is_received <> 'Y'
+  `;
+
+  return await query(sql);
 }
 
 module.exports = {
@@ -66,4 +74,3 @@ module.exports = {
   getStats,
   markAllRead
 };
-

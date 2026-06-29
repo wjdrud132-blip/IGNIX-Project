@@ -7,6 +7,7 @@ const alertRouter = require("./routes/alert");
 const trashbinRouter = require("./routes/trashbin");
 const alertRecordRouter = require("./routes/alertRouter");
 const settingsRouter = require("./routes/settings");
+const aiRouter = require("./routes/ai");
 const requireOperator = require("./middlewares/requireOperator");
 
 const app = express(); // express??紐⑤뱺湲곕뒫??app???댁븘以?
@@ -41,6 +42,7 @@ app.use("/alerts", alertRouter);
 app.use("/trashbins", trashbinRouter);
 app.use("/alert", alertRecordRouter);
 app.use("/settings", settingsRouter);
+app.use("/ai", aiRouter);
 
 app.get("/join", (req, res) => {
   res.render("join");

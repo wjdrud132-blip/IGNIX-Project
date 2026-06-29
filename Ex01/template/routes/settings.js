@@ -19,6 +19,7 @@ const defaultSystemSettings = Object.freeze({
   retentionPeriod: "90\uC77C",
   autoDelete: "Y",
   exportRange: "\uCD5C\uADFC 30\uC77C",
+  aiJudge: "Y",
 });
 
 function query(sql, params = []) {
@@ -225,6 +226,7 @@ router.post("/api/system/data", requireLogin, async (req, res) => {
     retentionPeriod: req.body.retentionPeriod || defaultSystemSettings.retentionPeriod,
     autoDelete: req.body.autoDelete === "Y" ? "Y" : "N",
     exportRange: req.body.exportRange || defaultSystemSettings.exportRange,
+    aiJudge: req.body.aiJudge === "N" ? "N" : "Y",
   };
 
   try {

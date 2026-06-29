@@ -2,6 +2,7 @@
 const router = express.Router();
 
 const conn = require("../config/db");
+const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
 
 router.get("/list", (req, res) => {
   const sql = `
@@ -54,7 +55,42 @@ router.get("/list", (req, res) => {
       return res.status(500).json({ message: "쓰레기통 목록 조회 실패" });
     }
 
-    res.json(rows);
+    const thresholdSql = "SELECT danger_temp, warning_temp, danger_smoke, warning_smoke FROM t_fire_threshold WHERE id = 1";
+    const aiSql = "SELECT setting_value FROM t_system_setting WHERE setting_key = 'aiJudge'";
+
+    conn.query(thresholdSql, (thresholdErr, thresholdRows) => {
+      const thresholdRow = thresholdRows && thresholdRows[0];
+      const thresholds = thresholdErr || !thresholdRow ? defaultThresholds : {
+        dangerTemp: Number(thresholdRow.danger_temp),
+        warningTemp: Number(thresholdRow.warning_temp),
+        dangerSmoke: Number(thresholdRow.danger_smoke),
+        warningSmoke: Number(thresholdRow.warning_smoke),
+      };
+
+      conn.query(aiSql, (aiErr, aiRows) => {
+        const aiEnabled = !aiErr && aiRows && aiRows[0] ? aiRows[0].setting_value !== "N" : true;
+        const judgedRows = rows.map((row) => {
+          const ruleStatus = row.alert_type;
+          const ai = judgeDanger(row, thresholds, aiEnabled);
+          return {
+            ...row,
+            rule_status: ruleStatus,
+            alert_type: ai.status,
+            ai_enabled: aiEnabled ? "Y" : "N",
+            ai_status: ai.status,
+            ai_reason: ai.reason.join(" "),
+            ai_confidence: ai.confidence,
+            temp_value: ai.sensor.temp,
+            smoke_value: ai.sensor.smoke,
+            flame_value: ai.sensor.flame,
+          };
+        }).sort((a, b) => {
+          const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
+          return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
+        });
+        res.json(judgedRows);
+      });
+    });
   });
 });
 

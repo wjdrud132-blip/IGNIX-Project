@@ -140,34 +140,6 @@
     .all-alert-row.read { }
     .all-alert-row.read strong { font-weight: 500; color: #9ca3af; }
     .side-alert-item.read { opacity: .55; } .side-alert-item.read .at { font-weight: 500; color: #9ca3af; } .side-alert-item.read .adot { filter: grayscale(1); opacity: .55; }
-    .district-dashboard { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: stretch; }
-    .district-summary { border: 1px solid #eef2f7; border-radius: 12px; padding: 16px; background: #f8fafc; display: flex; flex-direction: column; justify-content: space-between; min-height: 300px; }
-    .district-summary-kicker { font-size: 12px; font-weight: 800; color: #2563eb; margin-bottom: 8px; }
-    .district-summary-title { font-size: 22px; font-weight: 900; color: #10172f; line-height: 1.35; }
-    .district-summary-desc { font-size: 12px; color: #7b8798; line-height: 1.6; margin-top: 10px; }
-    .district-legend { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-    .district-legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #64748b; font-weight: 700; }
-    .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-    .legend-dot.danger { background: #ef4444; } .legend-dot.warn { background: #f59e0b; } .legend-dot.good { background: #22c55e; }
-    .district-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .district-card { min-height: 92px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 13px 14px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
-    .district-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15, 23, 42, .08); }
-    .district-card.hidden { display: none; }
-    .district-card.danger { background: #fff5f5; border-color: #fecaca; }
-    .district-card.warn { background: #fffbeb; border-color: #fde68a; }
-    .district-card.good { background: #f0fdf4; border-color: #bbf7d0; }
-    .district-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .district-name { font-size: 15px; font-weight: 900; color: #10172f; }
-    .district-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 900; }
-    .district-badge.danger { background: #fee2e2; color: #dc2626; }
-    .district-badge.warn { background: #fef3c7; color: #b45309; }
-    .district-badge.good { background: #dcfce7; color: #15803d; }
-    .district-counts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .district-counts span { font-size: 11px; color: #64748b; font-weight: 800; }
-    .district-counts b { margin-left: 3px; }
-    .district-counts .d { color: #dc2626; } .district-counts .w { color: #d97706; } .district-counts .g { color: #15803d; }
-    .district-foot { margin-top: 10px; font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .district-empty { grid-column: 1 / -1; padding: 42px; text-align: center; color: #94a3b8; border: 1px dashed #dbe3ef; border-radius: 12px; background: #f8fafc; }
   .operator-menu{display:none}</style>
 </head>
 <body>
@@ -288,23 +260,21 @@
             </div>
           </div>
 
-          <div class="district-dashboard">
-            <div class="district-summary">
-              <div>
-                <div class="district-summary-kicker">LOCATION OVERVIEW</div>
-                <div class="district-summary-title">&#49436;&#50872;&#49884;<br>&#44396;&#48324; &#50948;&#54744; &#50836;&#50557;</div>
-                <div class="district-summary-desc">&#46321;&#47197;&#46108; &#50416;&#47112;&#44592;&#53685; &#51452;&#49548;&#47484; &#44592;&#51456;&#51004;&#47196; &#50948;&#54744;&#51060; &#51080;&#45716; &#44396;&#50669;&#51012; &#47676;&#51200; &#48372;&#50668;&#51469;&#45768;&#45796;.</div>
-              </div>
-              <div class="district-legend">
-                <span><i class="legend-dot danger"></i>&#50948;&#54744; &#48156;&#49373;</span>
-                <span><i class="legend-dot warn"></i>&#51452;&#51032; &#44048;&#51648;</span>
-                <span><i class="legend-dot good"></i>&#51221;&#49345; &#50868;&#50689;</span>
-              </div>
-            </div>
-            <div class="district-grid" id="districtMap">
-              <div class="district-empty">&#44396;&#48324; &#54788;&#54889;&#51012; &#48520;&#47084;&#50724;&#45716; &#51473;&#51077;&#45768;&#45796;.</div>
-            </div>
-          </div>        </div>
+          <table>
+            <thead><tr><th>ID</th><th>설치 위치</th><th>상태</th><th>연기 감지값</th><th>온도</th><th>불꽃 감지</th><th>마지막 업데이트</th></tr></thead>
+            <tbody id="status-tbody">
+              <tr id="bin-1" class="danger-row" data-status="danger"><td>#04</td><td><div>#04 주차장 입구</div><div style="font-size:11px;color:#f87171;margin-top:2px;">서울시 마포구</div></td><td><span class="badge danger">위험</span></td><td><b>350</b></td><td><b>68.7°C</b></td><td>14:30:10</td></tr>
+              <tr id="bin-2" class="warn-row" data-status="warn"><td>#03</td><td><div>놀이터 옆</div><div style="font-size:11px;color:#bbb;margin-top:2px;">서울시 마포구</div></td><td><span class="badge warn">주의</span></td><td>120</td><td>45.2°C</td><td>14:30:15</td></tr>
+              <tr id="bin-3" class="warn-row" data-status="warn"><td>#07</td><td><div>운동장 입구</div><div style="font-size:11px;color:#bbb;margin-top:2px;">인천시 연수구</div></td><td><span class="badge warn">주의</span></td><td>110</td><td>43.5°C</td><td>14:30:03</td></tr>
+              <tr id="bin-4" data-status="good"><td>#01</td><td><div>공원 입구</div><div style="font-size:11px;color:#bbb;margin-top:2px;">서울시 강남구</div></td><td><span class="badge ok">정상</span></td><td>12</td><td>28.4°C</td><td>14:30:20</td></tr>
+              <tr id="bin-5" data-status="good"><td>#02</td><td><div>버스정류장</div><div style="font-size:11px;color:#bbb;margin-top:2px;">서울시 강남구</div></td><td><span class="badge ok">정상</span></td><td>18</td><td>29.1°C</td><td>14:30:18</td></tr>
+              <tr id="bin-6" data-status="good"><td>#05</td><td><div>광장 중앙</div><div style="font-size:11px;color:#bbb;margin-top:2px;">부산시 해운대구</div></td><td><span class="badge ok">정상</span></td><td>9</td><td>27.8°C</td><td>14:30:08</td></tr>
+              <tr id="bin-7" data-status="good"><td>#06</td><td><div>차고지 옆</div><div style="font-size:11px;color:#bbb;margin-top:2px;">부산시 해운대구</div></td><td><span class="badge ok">정상</span></td><td>15</td><td>30.2°C</td><td>14:30:05</td></tr>
+              <tr id="bin-8" data-status="good"><td>#08</td><td><div>도서관 옆</div><div style="font-size:11px;color:#bbb;margin-top:2px;">인천시 연수구</div></td><td><span class="badge ok">정상</span></td><td>8</td><td>26.9°C</td><td>14:30:01</td></tr>
+            </tbody>
+          </table>
+          <div class="more-row"><i class="ti ti-chevron-down" style="font-size:13px;vertical-align:-2px;"></i> 더보기</div>
+        </div>
 
         <div class="panel">
           <div class="panel-header"><div class="panel-title">최근 알림</div><div class="panel-more" id="sideOpenAllAlerts">더보기 →</div></div>
@@ -383,10 +353,11 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       else if (type === "danger") btn.className = "ft-btn active-danger";
       else if (type === "warn") btn.className = "ft-btn active-warn";
       else if (type === "good") btn.className = "ft-btn active-good";
-      document.querySelectorAll(".district-card").forEach((card) => {
-        card.classList.toggle("hidden", type !== "all" && card.dataset.status !== type);
+      document.querySelectorAll("#status-tbody tr").forEach((tr) => {
+        tr.classList.toggle("hidden", type !== "all" && tr.dataset.status !== type);
       });
     }
+
     function openAllAlerts() {
       document.getElementById("alertDropdown").classList.remove("open");
       document.getElementById("allAlertOverlay").classList.add("open");
@@ -502,57 +473,6 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       return "ti-check";
     }
 
-    function dashboardDistrictOf(row) {
-      const loc = String(row.bin_loc || "").trim();
-      const parts = loc.split(/\s+/);
-      if (parts[0] === "\uC11C\uC6B8\uC2DC" && parts[1] && parts[1].endsWith("\uAD6C")) return parts[1];
-      return "\uAE30\uD0C0";
-    }
-
-    function dashboardDistrictStatus(item) {
-      if (item.danger > 0) return "danger";
-      if (item.warn > 0) return "warn";
-      return "good";
-    }
-
-    function dashboardDistrictLabel(status) {
-      if (status === "danger") return "\uC704\uD5D8";
-      if (status === "warn") return "\uC8FC\uC758";
-      return "\uC815\uC0C1";
-    }
-
-    function renderDistrictMap(bins) {
-      const map = {};
-      bins.forEach((row) => {
-        const district = dashboardDistrictOf(row);
-        if (!map[district]) map[district] = { name: district, total: 0, danger: 0, warn: 0, good: 0, samples: [] };
-        const item = map[district];
-        const status = dashboardStatusOf(row);
-        item.total += 1;
-        if (status === "danger") item.danger += 1;
-        else if (status === "warn") item.warn += 1;
-        else item.good += 1;
-        item.samples.push(row);
-      });
-      const rank = (item) => item.danger > 0 ? 1 : item.warn > 0 ? 2 : 3;
-      const rows = Object.values(map).sort((a, b) => rank(a) - rank(b) || b.danger - a.danger || b.warn - a.warn || b.total - a.total || a.name.localeCompare(b.name, "ko-KR"));
-      const target = document.getElementById("districtMap");
-      if (!rows.length) {
-        target.innerHTML = '<div class="district-empty">\uD45C\uC2DC\uD560 \uC4F0\uB808\uAE30\uD1B5 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
-        return;
-      }
-      target.innerHTML = rows.map((item) => {
-        const status = dashboardDistrictStatus(item);
-        const iconType = status === "warn" ? "warning" : status;
-        const top = item.samples.find((row) => dashboardStatusOf(row) === "danger") || item.samples.find((row) => dashboardStatusOf(row) === "warn") || item.samples[0];
-        return '<div class="district-card ' + status + '" data-status="' + status + '" onclick="location.href=\'/realtime?gun=' + encodeURIComponent(item.name) + '\'">' +
-          '<div class="district-card-head"><div class="district-name">' + item.name + '</div><span class="district-badge ' + status + '"><i class="ti ' + dashboardAlertIcon(iconType) + '"></i>' + dashboardDistrictLabel(status) + '</span></div>' +
-          '<div class="district-counts"><span class="d">\uC704\uD5D8 <b>' + item.danger + '</b></span><span class="w">\uC8FC\uC758 <b>' + item.warn + '</b></span><span class="g">\uC815\uC0C1 <b>' + item.good + '</b></span><span>\uC804\uCCB4 <b>' + item.total + '</b></span></div>' +
-          '<div class="district-foot">\uC8FC\uC694 \uC704\uCE58: #' + String(top.bin_id).padStart(2, "0") + ' ' + (top.bin_loc || "-") + '</div>' +
-        '</div>';
-      }).join("");
-    }
-
     let dashboardLastRefreshAt = new Date();
     async function loadDashboardData() {
       dashboardLastRefreshAt = new Date();
@@ -578,7 +498,22 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       document.querySelector(".warn .stat-pct").textContent = bins.length ? ((warn / bins.length) * 100).toFixed(1) + "%" : "0%";
       document.querySelector(".good .stat-pct").textContent = bins.length ? ((good / bins.length) * 100).toFixed(1) + "%" : "0%";
 
-      renderDistrictMap(bins);
+      const lastUpdateTime = dashboardTime(dashboardLastRefreshAt);
+      document.getElementById("status-tbody").innerHTML = bins.map((row) => {
+        const status = dashboardStatusOf(row);
+        const label = status === "danger" ? "위험" : status === "warn" ? "주의" : "정상";
+        const badge = status === "good" ? "ok" : status;
+        return `<tr id="bin-${row.bin_id}" class="${status === "danger" ? "danger-row" : status === "warn" ? "warn-row" : ""}" data-status="${status}">
+          <td>#${row.bin_id}</td>
+          <td><div>${row.bin_loc || "-"}</div><div style="font-size:11px;color:#bbb;margin-top:2px;">Wi-Fi 연결</div></td>
+          <td><span class="badge ${badge}" title="${row.ai_reason || ''}">${label}</span></td>
+          <td><span class="ai-mini ${status}" title="${row.ai_reason || ''}"><i class="ti ti-sparkles"></i>${dashboardAiSummary(row, status)}</span></td>
+          <td><b>${dashboardParseSmoke(row)}</b></td>
+          <td><b>${dashboardParseTemp(row)}°C</b></td>
+          <td><b>${dashboardParseFlame(row)}</b></td>
+          <td>${lastUpdateTime}</td>
+        </tr>`;
+      }).join("");
 
       document.querySelector(".side-alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").slice(0, 4).map((alert) => {
         const kind = alert.alert_type === "danger" ? "d" : alert.alert_type === "warning" ? "w" : "o";
@@ -619,7 +554,6 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 </script>
 </body>
 </html>
-
 
 
 
