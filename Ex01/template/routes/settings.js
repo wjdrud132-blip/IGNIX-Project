@@ -125,8 +125,49 @@ async function saveSystemSettings(next, userId) {
   return getSystemSettings();
 }
 
-router.get("/", requireLogin, (req, res) => {
-  res.render("settings", { user: req.session.user || null });
+router.get("/", requireLogin, async (req, res) => {
+  let currentUser = req.session.user || {};
+
+  try {
+    const managerId = currentUser.user_id || currentUser.mgr_id;
+    const managerEmail = currentUser.mgr_email || currentUser.email;
+
+    if (managerId || managerEmail) {
+      await ensureManagerColumns();
+
+      const rows = managerId
+        ? await query(
+            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
+             FROM t_manager
+             WHERE mgr_id = ?`,
+            [managerId]
+          )
+        : await query(
+            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
+             FROM t_manager
+             WHERE mgr_email = ?`,
+            [managerEmail]
+          );
+
+      if (rows.length) {
+        const profile = rows[0];
+        currentUser = {
+          ...currentUser,
+          ...profile,
+          user_id: profile.mgr_id,
+          mgr_id: profile.mgr_id,
+          name: profile.mgr_name,
+          email: profile.mgr_email,
+          approval_status: profile.is_approved,
+        };
+        req.session.user = currentUser;
+      }
+    }
+  } catch (err) {
+    console.error("설정 페이지 계정 정보 조회 실패:", err);
+  }
+
+  res.render("settings", { currentUser });
 });
 
 router.get("/api/thresholds", requireLogin, async (req, res) => {
@@ -245,14 +286,19 @@ router.get("/api/profile", requireLogin, async (req, res) => {
       `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
        FROM t_manager
        WHERE mgr_id = ?`,
-      [req.session.user.user_id]
+      [req.session.user.user_id || req.session.user.mgr_id]
     );
 
     if (!rows.length) {
       return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
     }
 
-    res.json({ success: true, profile: rows[0] });
+    const profile = rows[0];
+    if (profile.role === "operator") {
+      profile.mgr_org = "서울특별시청";
+    }
+
+    res.json({ success: true, profile });
   } catch (err) {
     console.error("계정 정보 조회 실패:", err);
     res.status(500).json({ success: false, message: "계정 정보를 불러오지 못했습니다." });
@@ -261,55 +307,109 @@ router.get("/api/profile", requireLogin, async (req, res) => {
 
 router.post("/api/profile", requireLogin, async (req, res) => {
   const user = req.session.user;
+  const userId = user.user_id || user.mgr_id;
   const name = String(req.body.mgr_name || "").trim();
-  const org = String(req.body.mgr_org || "").trim();
-  const email = String(req.body.mgr_email || "").trim();
   const phone = String(req.body.mgr_phone || "").trim();
 
-  if (!name || !email) {
-    return res.status(400).json({ success: false, message: "이름과 이메일은 필수입니다." });
+  if (!name) {
+    return res.status(400).json({ success: false, message: "이름은 필수입니다." });
   }
 
   try {
     await ensureManagerColumns();
-    const rows = await query("SELECT mgr_email, role FROM t_manager WHERE mgr_id = ?", [user.user_id]);
+    const rows = await query("SELECT mgr_email, mgr_org, role FROM t_manager WHERE mgr_id = ?", [userId]);
     if (!rows.length) {
       return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
     }
 
-    const currentEmail = rows[0].mgr_email;
-    const emailChanged = currentEmail !== email;
-    const shouldRequireApproval = emailChanged && rows[0].role !== "operator";
-
     await query(
       `UPDATE t_manager
-       SET mgr_name = ?, mgr_org = ?, mgr_email = ?, mgr_phone = ?, is_approved = CASE WHEN ? THEN 0 ELSE is_approved END
+       SET mgr_name = ?, mgr_phone = ?
        WHERE mgr_id = ?`,
-      [name, org, email, phone, shouldRequireApproval, user.user_id]
+      [name, phone, userId]
     );
 
-    req.session.user.email = email;
-    if (shouldRequireApproval) {
-      req.session.user.approval_status = 0;
-    }
+    req.session.user.name = name;
+    req.session.user.mgr_name = name;
 
     res.json({
       success: true,
-      requiresApproval: shouldRequireApproval,
-      message: shouldRequireApproval
-        ? "이메일이 변경되어 관리자 승인이 다시 필요합니다."
-        : "계정 정보가 저장되었습니다.",
-      profile: { mgr_name: name, mgr_org: org, mgr_email: email, mgr_phone: phone },
+      requiresApproval: false,
+      message: "계정 정보가 저장되었습니다.",
+      profile: {
+        mgr_name: name,
+        mgr_org: rows[0].role === "operator" ? "서울특별시청" : rows[0].mgr_org,
+        mgr_email: rows[0].mgr_email,
+        mgr_phone: phone,
+      },
     });
   } catch (err) {
     console.error("계정 정보 저장 실패:", err);
-    if (err.code === "ER_DUP_ENTRY") {
-      return res.status(400).json({ success: false, message: "이미 사용 중인 이메일입니다." });
-    }
     res.status(500).json({ success: false, message: "계정 정보 저장에 실패했습니다." });
   }
 });
+router.delete("/api/profile", requireLogin, async (req, res) => {
+  const user = req.session.user || {};
+  const userId = user.user_id || user.mgr_id;
 
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "탈퇴할 계정 정보를 찾을 수 없습니다." });
+  }
+
+  try {
+    const rows = await query("SELECT mgr_id, mgr_email, role FROM t_manager WHERE mgr_id = ?", [userId]);
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
+    }
+
+    const transferRows = await query(
+      `SELECT mgr_id
+       FROM t_manager
+       WHERE mgr_id <> ? AND role = 'operator'
+       ORDER BY mgr_id
+       LIMIT 1`,
+      [userId]
+    );
+
+    const fallbackRows = transferRows.length
+      ? transferRows
+      : await query(
+          `SELECT mgr_id
+           FROM t_manager
+           WHERE mgr_id <> ?
+           ORDER BY role = 'operator' DESC, mgr_id
+           LIMIT 1`,
+          [userId]
+        );
+
+    const transferMgrId = fallbackRows.length ? fallbackRows[0].mgr_id : null;
+
+    await query("START TRANSACTION");
+
+    if (transferMgrId) {
+      await query("UPDATE t_alert SET mgr_id = ? WHERE mgr_id = ?", [transferMgrId, userId]);
+      await query("UPDATE t_trashbin SET mgr_id = ? WHERE mgr_id = ?", [transferMgrId, userId]);
+    } else {
+      await query("DELETE FROM t_alert WHERE mgr_id = ?", [userId]);
+      await query("DELETE FROM t_trashbin WHERE mgr_id = ?", [userId]);
+    }
+
+    await query("DELETE FROM t_manager WHERE mgr_id = ?", [userId]);
+    await query("COMMIT");
+
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("계정 탈퇴 후 세션 종료 실패:", err);
+      }
+      res.clearCookie("connect.sid");
+      res.json({ success: true, message: "탈퇴되었습니다." });
+    });
+  } catch (err) {
+    try { await query("ROLLBACK"); } catch (rollbackErr) { console.error("계정 탈퇴 롤백 실패:", rollbackErr); }
+    console.error("계정 탈퇴 실패:", err);
+    res.status(500).json({ success: false, message: "계정 탈퇴에 실패했습니다." });
+  }
+});
 router.post("/api/data/reset", requireOperator, async (req, res) => {
   const excludeTypes = Array.isArray(req.body.excludeTypes) ? req.body.excludeTypes : [];
   const allowedTypes = ["danger", "warning", "normal"];
@@ -403,3 +503,4 @@ router.get("/api/export/trashbins", (req, res) => {
 });
 
 module.exports = router;
+

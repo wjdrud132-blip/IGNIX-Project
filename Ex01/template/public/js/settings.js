@@ -5,8 +5,21 @@ const thresholdIds = ["dangerTemp", "warningTemp", "dangerSmoke", "warningSmoke"
 let originalProfileEmail = "";
 
 function setSidebarUser(name, email) {
-  document.getElementById("userName").textContent = name || (role === "operator" ? "운영자" : "관리자");
-  document.getElementById("userEmail").textContent = email || "";
+  const displayName =
+    name ||
+    serverUser.mgr_name ||
+    serverUser.name ||
+    (role === "operator" ? "운영자" : "관리자");
+  const displayEmail =
+    email ||
+    serverUser.mgr_email ||
+    serverUser.email ||
+    "";
+
+  const nameEl = document.getElementById("userName");
+  const emailEl = document.getElementById("userEmail");
+  if (nameEl) nameEl.textContent = displayName;
+  if (emailEl) emailEl.textContent = displayEmail;
 }
 
 function setNowText() {
@@ -49,6 +62,11 @@ function applyPermission() {
     const input = document.getElementById(id);
     if (input) input.disabled = !canEditThreshold;
   });
+
+  const aiControl = document.getElementById("aiJudgeControl");
+  const aiReadonly = document.getElementById("aiJudgeReadonly");
+  if (aiControl) aiControl.style.display = canEditThreshold ? "flex" : "none";
+  if (aiReadonly) aiReadonly.style.display = canEditThreshold ? "none" : "flex";
 
   const badge = document.getElementById("roleBadge");
   const box = document.getElementById("permissionBox");
@@ -135,6 +153,12 @@ function setToggleValue(toggleId, labelId, enabled) {
   if (!toggle || !label) return;
   toggle.classList.toggle("on", enabled);
   label.textContent = enabled ? "활성" : "비활성";
+
+  const readonlyLabel = document.getElementById(toggleId + "ReadonlyLabel");
+  if (readonlyLabel) {
+    readonlyLabel.textContent = enabled ? "활성" : "비활성";
+    readonlyLabel.className = enabled ? "badge ok" : "badge";
+  }
 }
 function isToggleOn(id) {
   const el = document.getElementById(id);
@@ -461,21 +485,20 @@ async function loadProfile() {
   const profile = result.profile;
   originalProfileEmail = profile.mgr_email || "";
   document.getElementById("profileName").value = profile.mgr_name || "";
-  document.getElementById("profileOrg").value = profile.mgr_org || sessionStorage.getItem("mgr_org") || sessionStorage.getItem("organization") || "소속 기관 미등록";
+  document.getElementById("profileOrg").value = profile.role === "operator" ? "서울특별시청" : (profile.mgr_org || sessionStorage.getItem("mgr_org") || sessionStorage.getItem("organization") || "소속 기관 미등록");
   document.getElementById("profileEmail").value = profile.mgr_email || "";
   document.getElementById("profilePhone").value = profile.mgr_phone || "";
   document.getElementById("accountRole").value = profile.role === "operator" ? "운영자" : "일반 관리자";
   document.getElementById("approvalStatus").value = Number(profile.is_approved) === 1 ? "승인 완료" : "승인 대기";
+
+  const sidebarName = document.getElementById("settingsSidebarName");
+  const sidebarEmail = document.getElementById("settingsSidebarEmail");
+  if (sidebarName) sidebarName.textContent = profile.mgr_name || (profile.role === "operator" ? "운영자" : "관리자");
+  if (sidebarEmail) sidebarEmail.textContent = profile.mgr_email || "";
 }
 async function saveProfile() {
-  const nextEmail = document.getElementById("profileEmail").value.trim();
-  if (role !== "operator" && originalProfileEmail && originalProfileEmail !== nextEmail) {
-    if (!confirm("?대찓?쇱쓣 蹂寃쏀븯硫??ㅼ떆 愿由ъ옄 ?뱀씤???꾩슂?⑸땲?? 怨꾩냽?좉퉴??")) return;
-  }
   const body = {
     mgr_name: document.getElementById("profileName").value,
-    mgr_org: document.getElementById("profileOrg").value,
-    mgr_email: nextEmail,
     mgr_phone: document.getElementById("profilePhone").value,
   };
   const res = await fetch("/settings/api/profile", {
@@ -484,16 +507,24 @@ async function saveProfile() {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  alert(result.message || (result.success ? "??λ릺?덉뒿?덈떎." : "??μ뿉 ?ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (result.success ? "계정 정보가 저장되었습니다." : "계정 정보 저장에 실패했습니다."));
   if (!result.success) return;
-  if (result.requiresApproval) {
-    sessionStorage.clear();
-    location.href = "/pending";
-    return;
-  }
   loadProfile();
 }
 
+async function withdrawAccount() {
+  if (!confirm("정말 계정을 탈퇴하시겠습니까?")) return;
+  const confirmText = prompt("계정 탈퇴를 진행하려면 '탈퇴'를 입력해주세요.");
+  if (confirmText !== "탈퇴") return alert("계정 탈퇴가 취소되었습니다.");
+
+  const res = await fetch("/settings/api/profile", { method: "DELETE" });
+  const result = await res.json();
+  if (!result.success) return alert(result.message || "계정 탈퇴에 실패했습니다.");
+
+  alert("탈퇴되었습니다.");
+  sessionStorage.clear();
+  location.replace("/");
+}
 function activateNav(id) {
   document.querySelectorAll(".set-nav-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.target === id);
@@ -523,7 +554,7 @@ function syncActiveNavByScroll() {
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await fetch("/manager/logout", { method: "POST" });
   sessionStorage.clear();
-  alert("濡쒓렇?꾩썐?섏뿀?듬땲??");
+  alert("로그아웃되었습니다.");
   location.replace("/");
 });
 document.getElementById("setContent").addEventListener("scroll", syncActiveNavByScroll);
@@ -617,6 +648,10 @@ applyPermission();
 loadThresholds();
 loadSystemSettings();
 loadProfile();
+
+
+
+
 
 
 

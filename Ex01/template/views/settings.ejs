@@ -156,7 +156,7 @@
   </style>
 </head>
 <body>
-  <% const currentUser = user || {}; %>
+  <% const pageUser = typeof currentUser !== "undefined" ? currentUser : {}; %>
 <div class="all-alert-overlay" id="topbarAllAlertOverlay">
     <div class="all-alert-modal">
       <div class="all-alert-header">
@@ -168,9 +168,20 @@
   </div>
   <script>
 const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
-window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
+window.__FIDS_USER__ = <%- JSON.stringify(pageUser) %>;</script>
 
-  <%- include("partials/settings-main-sidebar") %>
+  <%- include("partials/settings-main-sidebar", { settingsSidebarUser: pageUser }) %>
+  <script>
+    (function () {
+      const role = sessionStorage.getItem("role") || (window.__FIDS_USER__ && window.__FIDS_USER__.role) || "manager";
+      const name = sessionStorage.getItem("mgr_name") || (window.__FIDS_USER__ && (window.__FIDS_USER__.mgr_name || window.__FIDS_USER__.name)) || (role === "operator" ? "운영자" : "관리자");
+      const email = sessionStorage.getItem("mgr_email") || (window.__FIDS_USER__ && (window.__FIDS_USER__.mgr_email || window.__FIDS_USER__.email)) || "";
+      const nameEl = document.getElementById("settingsSidebarName");
+      const emailEl = document.getElementById("settingsSidebarEmail");
+      if (nameEl) nameEl.textContent = name;
+      if (emailEl) emailEl.textContent = email;
+    })();
+  </script>
 
   <div class="main">
     <div class="topbar"><div class="topbar-title">설정</div><div class="topbar-right"><i class="ti ti-calendar"></i><span id="nowText"></span><button class="refresh-btn" type="button" onclick="location.reload()"><i class="ti ti-refresh"></i>새로고침</button><div class="alert-area"><button class="alert-button" id="topbarAlertButton" type="button" title="알림"><i class="ti ti-bell"></i><span class="alert-dot" id="topbarAlertDot"></span></button><div class="alert-dropdown" id="topbarAlertDropdown"><div class="alert-head"><strong>알림</strong><button type="button" id="topbarReadAllBtn">모두 읽음</button></div><div class="alert-list" id="topbarAlertList"></div><button class="alert-more" type="button" id="topbarOpenAllAlertsBtn">전체 알림 보기 →</button></div></div></div></div>
@@ -208,6 +219,7 @@ window.__FIDS_USER__ = <%- JSON.stringify(currentUser) %>;</script>
 </script>
 </body>
 </html>
+
 
 
 

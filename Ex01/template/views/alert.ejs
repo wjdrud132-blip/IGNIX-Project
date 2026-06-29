@@ -202,10 +202,10 @@
           <div class="date-range"><input id="startDateInput" class="date-input" type="date"><span>~</span><input id="endDateInput" class="date-input" type="date"></div>
           <button class="btn" type="button" onclick="applyFilters()"><i class="ti ti-filter"></i>필터 적용</button>
           <span class="toolbar-spacer"></span>
-          <button class="btn primary" type="button" onclick="markAllRead()"><i class="ti ti-check"></i>전체 읽음 처리</button>
+          <button class="btn" type="button" onclick="markSelectedRead()"><i class="ti ti-check"></i>선택 읽음 처리</button><button class="btn primary" type="button" onclick="markAllRead()"><i class="ti ti-check"></i>전체 읽음 처리</button>
         </div>
         <table>
-          <thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기감지값</th><th>불꽃 감지</th><th>발생 시간</th><th>처리 상태</th><th>처리 시간</th></tr></thead>
+          <thead><tr><th style="width:42px;"><input id="selectAllAlerts" type="checkbox" onclick="toggleSelectAllAlerts(this.checked)"></th><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기감지값</th><th>불꽃 감지</th><th>발생 시간</th><th>처리 상태</th><th>처리 시간</th></tr></thead>
           <tbody id="alertBody"></tbody>
         </table>
         <div id="emptyText" class="empty" style="display:none;">조회된 알림 기록이 없습니다.</div>
@@ -247,6 +247,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     let selectedFormat = "csv";
     let testReadMode = false;
     let testReadAt = null;
+    let selectedAlertIds = new Set();
+    let selectedReadMap = new Map();
 
     const role = sessionStorage.getItem("role");
     const mgrName = sessionStorage.getItem("mgr_name");
@@ -310,7 +312,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       const endDate = $("endDateInput").value;
       return alertRows.filter((row) => {
         const alertDate = row.alerted_at ? new Date(row.alerted_at).toISOString().slice(0, 10) : "";
-        const readState = testReadMode ? "Y" : "N";
+        const readState = isRowRead(row) ? "Y" : "N";
         return (!sensorKeyword || String(row.bin_id).includes(sensorKeyword)) && (!locationKeyword || String(row.bin_loc || "").includes(locationKeyword)) && (!typeValue || row.alert_type === typeValue) && (!readValue || readState === readValue) && (!startDate || alertDate >= startDate) && (!endDate || alertDate <= endDate);
       });
     }
@@ -318,6 +320,19 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function sortRows(rows) {
       const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : type === "normal" ? 3 : 4;
       return [...rows].sort((a, b) => rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id) || new Date(b.alerted_at) - new Date(a.alerted_at));
+    }
+
+    function rowKey(row) {
+      return String(row.alert_id || row.bin_id || "");
+    }
+
+    function isRowRead(row) {
+      return testReadMode || selectedReadMap.has(rowKey(row));
+    }
+
+    function rowReadAt(row) {
+      const selectedReadAt = selectedReadMap.get(rowKey(row));
+      return selectedReadAt || (testReadMode ? testReadAt : null);
     }
 
     function renderTable() {
@@ -328,11 +343,16 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       const pageRows = rows.slice(start, start + pageLimit);
       $("emptyText").style.display = pageRows.length ? "none" : "block";
       $("alertBody").innerHTML = pageRows.map((row) => {
-        const isRead = testReadMode;
+        const key = rowKey(row);
+        const isRead = isRowRead(row);
+        const readAt = rowReadAt(row);
         const trClass = isRead ? "read-row" : row.alert_type === "danger" ? "danger-row" : row.alert_type === "warning" ? "warning-row" : "";
         const badgeClass = isRead ? "read" : row.alert_type;
-        return `<tr class="${trClass}"><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead && testReadAt ? timeOnly(testReadAt) : "-"}</td></tr>`;
+        const checked = selectedAlertIds.has(key) ? "checked" : "";
+        return `<tr class="${trClass}"><td><input type="checkbox" class="alert-row-check" data-alert-id="${key}" ${checked} onchange="toggleAlertSelection('${key}', this.checked)"></td><td><span class="badge ${badgeClass}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${String(row.bin_id).padStart(2, "0")}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${isRead ? "read" : "danger"}">${isRead ? "처리 완료" : "미처리"}</span></td><td>${isRead && readAt ? timeOnly(readAt) : "-"}</td></tr>`;
       }).join("");
+      const selectAll = $("selectAllAlerts");
+      if (selectAll) selectAll.checked = pageRows.length > 0 && pageRows.every((row) => selectedAlertIds.has(rowKey(row)));
       const end = Math.min(start + pageLimit, rows.length);
       $("pagerInfo").textContent = rows.length ? `총 ${rows.length}건 중 ${start + 1}-${end}건 표시` : "총 0건";
       let pagerHtml = "";
@@ -399,6 +419,28 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function applyFilters() { currentPage = 1; renderTable(); }
     function goPage(page) { currentPage = page; renderTable(); }
+    function toggleAlertSelection(id, checked) {
+      checked ? selectedAlertIds.add(String(id)) : selectedAlertIds.delete(String(id));
+    }
+
+    function toggleSelectAllAlerts(checked) {
+      sortRows(filteredRows()).slice((currentPage - 1) * pageLimit, currentPage * pageLimit).forEach((row) => {
+        const key = rowKey(row);
+        checked ? selectedAlertIds.add(key) : selectedAlertIds.delete(key);
+      });
+      renderTable();
+    }
+
+    function markSelectedRead() {
+      if (!selectedAlertIds.size) return alert("읽음 처리할 알림을 선택해주세요.");
+      const now = new Date();
+      selectedAlertIds.forEach((id) => { if (!selectedReadMap.has(id)) selectedReadMap.set(id, now); });
+      selectedAlertIds.clear();
+      const selectAll = $("selectAllAlerts");
+      if (selectAll) selectAll.checked = false;
+      renderTable();
+    }
+
     function markAllRead() { if (!testReadMode) { testReadMode = true; testReadAt = new Date(); } renderTable(); }
     function openExportModal() { $("exportModal").classList.add("open"); }
     function closeExportModal() { $("exportModal").classList.remove("open"); }
@@ -423,10 +465,10 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function exportAlerts() {
       const rows = exportRows();
       const lines = [["유형", "센서 ID", "설치 위치", "내용", "온도", "연기감지값", "불꽃 감지", "발생 시간", "처리 상태", "처리 시간"]];
-      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row), parseSmoke(row), parseFlame(row), timeOnly(row.alerted_at), testReadMode ? "처리 완료" : "미처리", testReadMode && testReadAt ? timeOnly(testReadAt) : "-"]));
+      rows.forEach((row) => lines.push([typeLabel(row.alert_type), `#${String(row.bin_id).padStart(2, "0")}`, row.bin_loc || "-", messageFor(row.alert_type), parseTemp(row), parseSmoke(row), parseFlame(row), timeOnly(row.alerted_at), isRowRead(row) ? "처리 완료" : "미처리", isRowRead(row) && rowReadAt(row) ? timeOnly(rowReadAt(row)) : "-"]));
       if (selectedFormat === "pdf") {
         let bodyRows = "";
-        rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${String(row.bin_id).padStart(2, "0")}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td>${testReadMode ? "처리 완료" : "미처리"}</td></tr>`; });
+        rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${String(row.bin_id).padStart(2, "0")}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td>${isRowRead(row) ? "처리 완료" : "미처리"}</td></tr>`; });
         const html = `<html><head><title>FIDS 알림 기록</title><style>body{font-family:Arial,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}.danger{color:#dc2626;font-weight:700}</style></head><body><h2>FIDS 알림 기록</h2><table><thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기</th><th>불꽃</th><th>발생 시간</th><th>처리 상태</th></tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
         const popup = window.open("", "_blank"); popup.document.write(html); popup.document.close(); popup.print(); closeExportModal(); return;
       }
@@ -448,6 +490,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       alertRows = result.rows || [];
       testReadMode = false;
       testReadAt = null;
+      selectedAlertIds = new Set();
+      selectedReadMap = new Map();
       renderStats();
       renderMonthChart();
       renderFrequency();
@@ -545,3 +589,9 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 </script>
 </body>
 </html>
+
+
+
+
+
+

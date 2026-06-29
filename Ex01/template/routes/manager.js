@@ -214,7 +214,12 @@ router.post("/login", (req, res) => {
 
       req.session.user = {
         user_id: user.mgr_id,
+        mgr_id: user.mgr_id,
         email: user.mgr_email,
+        mgr_email: user.mgr_email,
+        name: user.mgr_name,
+        mgr_name: user.mgr_name,
+        mgr_org: user.mgr_org,
         role: user.role,
         approval_status: user.is_approved,
       };
