@@ -1,4 +1,5 @@
-const conn = require("../config/db");
+﻿const conn = require("../config/db");
+const { filterRowsByRegion, buildLocationWhere } = require("../utils/regionScope");
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -13,7 +14,7 @@ function query(sql, params = []) {
   });
 }
 
-async function getLogs() {
+async function getLogs(req) {
   const sql = `
     SELECT
       a.alert_id,
@@ -40,11 +41,11 @@ async function getLogs() {
       a.alert_id DESC
   `;
 
-  return await query(sql);
+  return filterRowsByRegion(req, await query(sql), "bin_loc");
 }
 
-async function getStats() {
-  const rows = await getLogs();
+async function getStats(req) {
+  const rows = await getLogs(req);
 
   return {
     total: rows.length,
@@ -54,19 +55,23 @@ async function getStats() {
   };
 }
 
-async function markAllRead() {
+async function markAllRead(req) {
+  const scope = buildLocationWhere(req, "b.bin_loc");
   const sql = `
-    UPDATE t_alert
+    UPDATE t_alert a
+    LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
     SET
-      is_received = 'Y',
-      received_at = CASE
-        WHEN is_received = 'Y' THEN received_at
+      a.is_received = 'Y',
+      a.received_at = CASE
+        WHEN a.is_received = 'Y' THEN a.received_at
         ELSE NOW()
       END
-    WHERE is_received <> 'Y'
+    WHERE a.is_received <> 'Y'
+      AND (b.network_status IS NULL OR b.network_status <> 9)
+      ${scope.clause}
   `;
 
-  return await query(sql);
+  return await query(sql, scope.params);
 }
 
 module.exports = {
@@ -74,3 +79,6 @@ module.exports = {
   getStats,
   markAllRead
 };
+
+
+

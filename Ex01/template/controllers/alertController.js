@@ -6,7 +6,7 @@ exports.renderAlertPage = (req, res) => {
 
 exports.getLogs = async (req, res) => {
   try {
-    const rows = await alertModel.getLogs();
+    const rows = await alertModel.getLogs(req);
 
     res.json({
       success: true,
@@ -24,7 +24,7 @@ exports.getLogs = async (req, res) => {
 
 exports.getStats = async (req, res) => {
   try {
-    const stats = await alertModel.getStats();
+    const stats = await alertModel.getStats(req);
 
     res.json({
       success: true,
@@ -42,7 +42,7 @@ exports.getStats = async (req, res) => {
 
 exports.markAllRead = async (req, res) => {
   try {
-    const result = await alertModel.markAllRead();
+    const result = await alertModel.markAllRead(req);
 
     res.json({
       success: true,

@@ -3,6 +3,7 @@ const router = express.Router();
 
 const conn = require("../config/db");
 const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
+const { filterRowsByRegion, canViewLocation } = require("../utils/regionScope");
 
 router.get("/list", (req, res) => {
   const sql = `
@@ -54,6 +55,8 @@ router.get("/list", (req, res) => {
       console.error("쓰레기통 목록 조회 실패:", err);
       return res.status(500).json({ message: "쓰레기통 목록 조회 실패" });
     }
+
+    rows = filterRowsByRegion(req, rows, "bin_loc");
 
     const thresholdSql = "SELECT danger_temp, warning_temp, danger_smoke, warning_smoke FROM t_fire_threshold WHERE id = 1";
     const aiSql = "SELECT setting_value FROM t_system_setting WHERE setting_key = 'aiJudge'";
@@ -117,7 +120,7 @@ router.get("/trash/list", (req, res) => {
       return res.status(500).json({ message: "휴지통 목록 조회 실패" });
     }
 
-    res.json(rows);
+    res.json(filterRowsByRegion(req, rows, "bin_loc"));
   });
 });
 
@@ -218,6 +221,9 @@ router.delete("/:bin_id", (req, res) => {
 });
 
 module.exports = router;
+
+
+
 
 
 

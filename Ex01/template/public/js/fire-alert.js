@@ -99,17 +99,7 @@ function showDangerModal(alert) {
 
     overlay.remove();
 
-    if (location.pathname === "/dashboard") {
-      const target = document.getElementById("bin-" + alert.bin_id);
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-        target.classList.add("focus-bin");
-        setTimeout(() => target.classList.remove("focus-bin"), 2500);
-        return;
-      }
-    }
-
-    location.href = "/dashboard?bin_id=" + alert.bin_id;
+    location.href = "/realtime?bin_id=" + alert.bin_id;
   });
 }
 
@@ -139,3 +129,4 @@ function formatDate(value) {
 
 checkDangerAlert();
 setInterval(checkDangerAlert, 10000);
+
