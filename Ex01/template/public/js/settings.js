@@ -428,10 +428,10 @@ async function restoreTrashbin(binId) {
 }
 
 async function deleteTrashPermanently(binId) {
-  if (!confirm("?댁??듭뿉?쒕룄 ??젣?섎㈃ DB?먯꽌 ?꾩쟾????젣?⑸땲?? 怨꾩냽?좉퉴??")) return;
+  if (!confirm("삭제하면 쓰레기통이 완전히 삭제됩니다. 계속할까요?")) return;
   const res = await fetch("/trashbins/trash/" + binId, { method: "DELETE" });
   const result = await res.json();
-  alert(result.message || (res.ok ? "?꾩쟾????젣?섏뿀?듬땲??" : "??젣???ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (res.ok ? "쓰레기통이 완전히 삭제되었습니다." : "삭제에 실패했습니다."));
   await loadTrashList();
 }
 
@@ -485,7 +485,7 @@ async function loadProfile() {
   const profile = result.profile;
   originalProfileEmail = profile.mgr_email || "";
   document.getElementById("profileName").value = profile.mgr_name || "";
-  document.getElementById("profileOrg").value = profile.role === "operator" ? "서울특별시청" : (profile.mgr_org || sessionStorage.getItem("mgr_org") || sessionStorage.getItem("organization") || "소속 기관 미등록");
+  document.getElementById("profileOrg").value = profile.role === "operator" ? "광주광역시 동구청" : (profile.mgr_org || sessionStorage.getItem("mgr_org") || sessionStorage.getItem("organization") || "소속 기관 미등록");
   document.getElementById("profileEmail").value = profile.mgr_email || "";
   document.getElementById("profilePhone").value = profile.mgr_phone || "";
   document.getElementById("accountRole").value = profile.role === "operator" ? "운영자" : "일반 관리자";
@@ -648,6 +648,8 @@ applyPermission();
 loadThresholds();
 loadSystemSettings();
 loadProfile();
+
+
 
 
 

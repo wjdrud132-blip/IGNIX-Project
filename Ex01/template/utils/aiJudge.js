@@ -1,4 +1,4 @@
-const defaultThresholds = Object.freeze({
+﻿const defaultThresholds = Object.freeze({
   dangerTemp: 80,
   warningTemp: 55,
   dangerSmoke: 300,
@@ -13,9 +13,9 @@ function originalStatus(row) {
 
 function fallbackSensorValues(row) {
   const id = Number(row && row.bin_id);
-  const dangerMap = { 1: [68.7, 350, 1], 2: [68.7, 350, 1], 3: [66.4, 328, 1], 4: [64.9, 305, 1] };
-  const warningMap = { 5: [45.2, 120, 0], 6: [43.5, 110, 0], 7: [44.8, 108, 0] };
-  const normalMap = { 8: [28.4, 12, 0], 9: [29.1, 18, 0], 10: [27.8, 9, 0], 11: [30.2, 15, 0], 12: [26.9, 8, 0] };
+  const dangerMap = { 1: [68.7, 350, 1], 2: [68.7, 350, 1], 3: [66.4, 328, 1], 4: [64.9, 305, 1], 10: [67.5, 320, 1] };
+  const warningMap = { 5: [45.2, 120, 0], 6: [43.5, 110, 0], 7: [44.8, 108, 0], 8: [44.6, 115, 0] };
+  const normalMap = { 9: [29.1, 18, 0], 11: [30.2, 15, 0], 12: [26.9, 8, 0] };
   const values = dangerMap[id] || warningMap[id] || normalMap[id] || [28.4, 12, 0];
   return { temp: values[0], smoke: values[1], flame: values[2] };
 }
@@ -93,3 +93,4 @@ module.exports = {
   judgeDanger,
   parseSensorValues,
 };
+

@@ -2,8 +2,12 @@
 const router = express.Router();
 
 const conn = require("../config/db");
-const { filterRowsByRegion } = require("../utils/regionScope");
+const { filterRowsByRegion, dedupeRowsByLocation } = require("../utils/regionScope");
 const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
+
+function displayBinId(binId) {
+  return binId;
+}
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -22,9 +26,9 @@ function fallbackAlertMsg(binId) {
   if (id === 5) return "온도 45.2 / 연기 감지값 120 / 불꽃 감지 0";
   if (id === 6) return "온도 43.5 / 연기 감지값 110 / 불꽃 감지 0";
   if (id === 7) return "온도 44.8 / 연기 감지값 108 / 불꽃 감지 0";
-  if (id === 8) return "온도 28.4 / 연기 감지값 12 / 불꽃 감지 0";
+  if (id === 8) return "온도 44.6 / 연기 감지값 115 / 불꽃 감지 0";
   if (id === 9) return "온도 29.1 / 연기 감지값 18 / 불꽃 감지 0";
-  if (id === 10) return "온도 27.8 / 연기 감지값 9 / 불꽃 감지 0";
+  if (id === 10) return "온도 67.5 / 연기 감지값 320 / 불꽃 감지 1";
   if (id === 11) return "온도 30.2 / 연기 감지값 15 / 불꽃 감지 0";
   return "온도 26.9 / 연기 감지값 8 / 불꽃 감지 0";
 }
@@ -60,8 +64,8 @@ async function getScopedAlerts(req) {
       b.bin_id AS alert_id,
       b.bin_id,
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN 'danger'
-        WHEN b.bin_id IN (5, 6, 7) THEN 'warning'
+        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 'danger'
+        WHEN b.bin_id IN (5, 6, 7, 8) THEN 'warning'
         ELSE 'normal'
       END AS rule_status,
       COALESCE(a.alert_msg,
@@ -73,9 +77,9 @@ async function getScopedAlerts(req) {
           WHEN b.bin_id = 5 THEN '온도 45.2 / 연기 감지값 120 / 불꽃 감지 0'
           WHEN b.bin_id = 6 THEN '온도 43.5 / 연기 감지값 110 / 불꽃 감지 0'
           WHEN b.bin_id = 7 THEN '온도 44.8 / 연기 감지값 108 / 불꽃 감지 0'
-          WHEN b.bin_id = 8 THEN '온도 28.4 / 연기 감지값 12 / 불꽃 감지 0'
+          WHEN b.bin_id = 8 THEN '온도 44.6 / 연기 감지값 115 / 불꽃 감지 0'
           WHEN b.bin_id = 9 THEN '온도 29.1 / 연기 감지값 18 / 불꽃 감지 0'
-          WHEN b.bin_id = 10 THEN '온도 27.8 / 연기 감지값 9 / 불꽃 감지 0'
+          WHEN b.bin_id = 10 THEN '온도 67.5 / 연기 감지값 320 / 불꽃 감지 1'
           WHEN b.bin_id = 11 THEN '온도 30.2 / 연기 감지값 15 / 불꽃 감지 0'
           ELSE '온도 26.9 / 연기 감지값 8 / 불꽃 감지 0'
         END
@@ -101,12 +105,13 @@ async function getScopedAlerts(req) {
 
   const thresholds = await getThresholds();
   const aiEnabled = await getAiEnabled();
-  const rows = filterRowsByRegion(req, await query(sql), "bin_loc");
+  const rows = dedupeRowsByLocation(filterRowsByRegion(req, await query(sql), "bin_loc"), "bin_loc");
 
   return rows.map((row) => {
     const ai = judgeDanger({ ...row, alert_type: row.rule_status, alert_msg: row.alert_msg || fallbackAlertMsg(row.bin_id) }, thresholds, aiEnabled);
     return {
       ...row,
+      display_bin_id: displayBinId(row.bin_id),
       alert_type: ai.status,
       ai_enabled: aiEnabled ? "Y" : "N",
       temp_value: ai.sensor.temp,
@@ -128,6 +133,7 @@ router.get("/danger/latest", async (req, res) => {
       hasDanger: true,
       alert_id: danger.alert_id,
       bin_id: danger.bin_id,
+      display_bin_id: displayBinId(danger.bin_id),
       location: danger.bin_loc,
       alert_msg: danger.alert_msg,
       alerted_at: danger.alerted_at,
@@ -155,3 +161,5 @@ router.post("/read-all", (req, res) => {
 });
 
 module.exports = router;
+
+

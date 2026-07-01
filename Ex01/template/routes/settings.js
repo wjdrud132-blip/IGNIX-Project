@@ -295,7 +295,7 @@ router.get("/api/profile", requireLogin, async (req, res) => {
 
     const profile = rows[0];
     if (profile.role === "operator") {
-      profile.mgr_org = "서울특별시청";
+      profile.mgr_org = "광주광역시 동구청";
     }
 
     res.json({ success: true, profile });
@@ -338,7 +338,7 @@ router.post("/api/profile", requireLogin, async (req, res) => {
       message: "계정 정보가 저장되었습니다.",
       profile: {
         mgr_name: name,
-        mgr_org: rows[0].role === "operator" ? "서울특별시청" : rows[0].mgr_org,
+        mgr_org: rows[0].role === "operator" ? "광주광역시 동구청" : rows[0].mgr_org,
         mgr_email: rows[0].mgr_email,
         mgr_phone: phone,
       },
@@ -503,4 +503,5 @@ router.get("/api/export/trashbins", (req, res) => {
 });
 
 module.exports = router;
+
 

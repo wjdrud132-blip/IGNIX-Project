@@ -1,7 +1,7 @@
 ﻿const managerRegions = {
-  "구예진": ["강남구", "강동구", "관악구", "서초구"],
-  "장현지": ["마포구", "노원구", "서대문구", "성동구"],
-  "관리자3": ["용산구", "종로구", "송파구", "은평구", "중구"],
+  "구예진": ["동구", "남구"],
+  "장현지": ["북구", "광산구"],
+  "관리자3": ["서구"],
 };
 
 function getUser(reqOrUser) {
@@ -49,6 +49,22 @@ function filterRowsByRegion(reqOrUser, rows, locationKey = "bin_loc") {
   return rows.filter((row) => canViewLocation(reqOrUser, row[locationKey]));
 }
 
+
+function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
+  if (!Array.isArray(rows)) return [];
+
+  const byLocation = new Map();
+  rows.forEach((row) => {
+    const location = String(row[locationKey] || "").replace(/\s+/g, " ").trim();
+    const key = location || `__bin_${row.bin_id}`;
+    const prev = byLocation.get(key);
+    if (!prev || Number(row.bin_id) < Number(prev.bin_id)) {
+      byLocation.set(key, row);
+    }
+  });
+
+  return Array.from(byLocation.values());
+}
 function buildLocationWhere(reqOrUser, fieldName) {
   const regions = getRegions(reqOrUser);
   if (regions === null) return { clause: "", params: [] };
@@ -66,5 +82,10 @@ module.exports = {
   isOperator,
   canViewLocation,
   filterRowsByRegion,
+  dedupeRowsByLocation,
   buildLocationWhere,
 };
+
+
+
+

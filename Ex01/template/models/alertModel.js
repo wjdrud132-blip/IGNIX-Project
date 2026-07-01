@@ -19,6 +19,7 @@ async function getLogs(req) {
     SELECT
       a.alert_id,
       a.bin_id,
+      a.bin_id AS display_bin_id,
       a.alert_type,
       a.alert_msg,
       a.alerted_at,
@@ -28,7 +29,8 @@ async function getLogs(req) {
       b.installed_at
     FROM t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
-    WHERE b.network_status IS NULL OR b.network_status <> 9
+    WHERE (b.network_status IS NULL OR b.network_status <> 9)
+      AND a.alert_type <> 'normal'
     ORDER BY
       CASE a.alert_type
         WHEN 'danger' THEN 1

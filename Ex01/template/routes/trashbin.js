@@ -3,7 +3,11 @@ const router = express.Router();
 
 const conn = require("../config/db");
 const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
-const { filterRowsByRegion, canViewLocation } = require("../utils/regionScope");
+const { filterRowsByRegion, canViewLocation, dedupeRowsByLocation } = require("../utils/regionScope");
+
+function displayBinId(binId) {
+  return binId;
+}
 
 router.get("/list", (req, res) => {
   const sql = `
@@ -18,8 +22,8 @@ router.get("/list", (req, res) => {
       m.mgr_phone,
       a.alert_id,
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN 'danger'
-        WHEN b.bin_id IN (5, 6, 7) THEN 'warning'
+        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 'danger'
+        WHEN b.bin_id IN (5, 6, 7, 8) THEN 'warning'
         ELSE 'normal'
       END AS alert_type,
       a.alert_msg,
@@ -43,8 +47,8 @@ router.get("/list", (req, res) => {
     WHERE IFNULL(b.network_status, 1) <> 9
     ORDER BY
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4) THEN 1
-        WHEN b.bin_id IN (5, 6, 7) THEN 2
+        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 1
+        WHEN b.bin_id IN (5, 6, 7, 8) THEN 2
         ELSE 3
       END,
       b.bin_id ASC
@@ -56,7 +60,7 @@ router.get("/list", (req, res) => {
       return res.status(500).json({ message: "쓰레기통 목록 조회 실패" });
     }
 
-    rows = filterRowsByRegion(req, rows, "bin_loc");
+    rows = dedupeRowsByLocation(filterRowsByRegion(req, rows, "bin_loc"), "bin_loc");
 
     const thresholdSql = "SELECT danger_temp, warning_temp, danger_smoke, warning_smoke FROM t_fire_threshold WHERE id = 1";
     const aiSql = "SELECT setting_value FROM t_system_setting WHERE setting_key = 'aiJudge'";
@@ -77,6 +81,7 @@ router.get("/list", (req, res) => {
           const ai = judgeDanger(row, thresholds, aiEnabled);
           return {
             ...row,
+            display_bin_id: displayBinId(row.bin_id),
             rule_status: ruleStatus,
             alert_type: ai.status,
             ai_enabled: aiEnabled ? "Y" : "N",
@@ -120,7 +125,7 @@ router.get("/trash/list", (req, res) => {
       return res.status(500).json({ message: "휴지통 목록 조회 실패" });
     }
 
-    res.json(filterRowsByRegion(req, rows, "bin_loc"));
+    res.json(filterRowsByRegion(req, rows, "bin_loc").map((row) => ({ ...row, display_bin_id: displayBinId(row.bin_id) })));
   });
 });
 
@@ -221,6 +226,8 @@ router.delete("/:bin_id", (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
 

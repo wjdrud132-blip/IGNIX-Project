@@ -167,6 +167,18 @@
     .district-counts b { margin-left: 3px; }
     .district-counts .d { color: #dc2626; } .district-counts .w { color: #d97706; } .district-counts .g { color: #15803d; }
     .district-foot { margin-top: 10px; font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .district-locations { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+    .district-location { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11px; color: #64748b; }
+    .district-location b { flex: 0 0 auto; font-size: 11px; color: #10172f; }
+    .district-location span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .district-location-more { font-size: 11px; color: #94a3b8; font-weight: 700; }
+    .district-dashboard.compact { grid-template-columns: 190px 1fr; }
+    .district-dashboard.compact .district-summary { min-height: 220px; padding: 14px; }
+    .district-dashboard.compact .district-summary-title { font-size: 19px; }
+    .district-dashboard.compact .district-summary-desc { font-size: 11px; }
+    .district-dashboard.compact .district-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+    .district-dashboard.compact .district-card { min-height: 132px; padding: 12px 14px; justify-content: flex-start; }
+    .district-dashboard.compact .district-counts { margin-top: 10px; }
     .district-empty { grid-column: 1 / -1; padding: 42px; text-align: center; color: #94a3b8; border: 1px dashed #dbe3ef; border-radius: 12px; background: #f8fafc; }
   .operator-menu{display:none}</style>
 </head>
@@ -204,8 +216,6 @@
       <div class="topbar-right">
         <i class="ti ti-calendar"></i>
         <span id="nowText"></span>
-        <button class="refresh-btn" type="button" onclick="loadDashboardData()"><i class="ti ti-refresh"></i>새로고침</button>
-
         <div class="alert-area">
           <button class="alert-button" id="alertButton" type="button" title="알림">
             <i class="ti ti-bell"></i>
@@ -292,8 +302,8 @@
             <div class="district-summary">
               <div>
                 <div class="district-summary-kicker">LOCATION OVERVIEW</div>
-                <div class="district-summary-title">&#49436;&#50872;&#49884;<br>&#44396;&#48324; &#50948;&#54744; &#50836;&#50557;</div>
-                <div class="district-summary-desc">&#46321;&#47197;&#46108; &#50416;&#47112;&#44592;&#53685; &#51452;&#49548;&#47484; &#44592;&#51456;&#51004;&#47196; &#50948;&#54744;&#51060; &#51080;&#45716; &#44396;&#50669;&#51012; &#47676;&#51200; &#48372;&#50668;&#51469;&#45768;&#45796;.</div>
+                <div class="district-summary-title">광주광역시<br>구별 위험 요약</div>
+                <div class="district-summary-desc">등록된 쓰레기통 주소를 기준으로 광주 5개 구의 위험 현황을 먼저 보여줍니다.</div>
               </div>
               <div class="district-legend">
                 <span><i class="legend-dot danger"></i>&#50948;&#54744; &#48156;&#49373;</span>
@@ -377,15 +387,17 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       location.replace("/");
     });
 
+    let dashboardCurrentFilter = "all";
+    let dashboardBins = [];
+
     function filterTable(type, btn) {
+      dashboardCurrentFilter = type;
       document.querySelectorAll(".ft-btn").forEach((button) => { button.className = "ft-btn"; });
       if (type === "all") btn.className = "ft-btn active-all";
       else if (type === "danger") btn.className = "ft-btn active-danger";
       else if (type === "warn") btn.className = "ft-btn active-warn";
       else if (type === "good") btn.className = "ft-btn active-good";
-      document.querySelectorAll(".district-card").forEach((card) => {
-        card.classList.toggle("hidden", type !== "all" && card.dataset.status !== type);
-      });
+      renderDistrictMap(dashboardBins, dashboardCurrentFilter);
     }
     function openAllAlerts() {
       document.getElementById("alertDropdown").classList.remove("open");
@@ -450,9 +462,9 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function dashboardFallbackSensorValues(row) {
       const id = Number(row.bin_id);
-      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305] };
-      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108] };
-      const normalMap = { 8: [28.4, 12], 9: [29.1, 18], 10: [27.8, 9], 11: [30.2, 15], 12: [26.9, 8] };
+      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305], 10: [67.5, 320] };
+      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108], 8: [44.6, 115] };
+      const normalMap = { 9: [29.1, 18], 11: [30.2, 15], 12: [26.9, 8] };
       const values = dangerMap[id] || warningMap[id] || normalMap[id] || (row.alert_type === "danger" ? [68.7, 350] : row.alert_type === "warning" ? [45.2, 120] : [28.4, 12]);
       return { temp: values[0], smoke: values[1], flame: row.alert_type === "danger" ? 1 : 0 };
     }
@@ -505,8 +517,11 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function dashboardDistrictOf(row) {
       const loc = String(row.bin_loc || "").trim();
       const parts = loc.split(/\s+/);
-      if (parts[0] === "\uC11C\uC6B8\uC2DC" && parts[1] && parts[1].endsWith("\uAD6C")) return parts[1];
-      return "\uAE30\uD0C0";
+      const gwangjuDistricts = ["동구", "남구", "북구", "광산구", "서구"];
+      const matched = gwangjuDistricts.find((district) => parts.includes(district) || loc.includes("광주광역시 " + district) || loc.includes("광주시 " + district));
+      if (matched) return matched;
+      const anyGu = parts.find((part) => part.endsWith("구"));
+      return anyGu || "기타";
     }
 
     function dashboardDistrictStatus(item) {
@@ -521,9 +536,13 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       return "\uC815\uC0C1";
     }
 
-    function renderDistrictMap(bins) {
+    function renderDistrictMap(bins, filterType = "all") {
       const map = {};
-      bins.forEach((row) => {
+      const visibleBins = filterType === "all"
+        ? bins
+        : bins.filter((row) => dashboardStatusOf(row) === filterType);
+
+      visibleBins.forEach((row) => {
         const district = dashboardDistrictOf(row);
         if (!map[district]) map[district] = { name: district, total: 0, danger: 0, warn: 0, good: 0, samples: [] };
         const item = map[district];
@@ -534,21 +553,28 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
         else item.good += 1;
         item.samples.push(row);
       });
+
       const rank = (item) => item.danger > 0 ? 1 : item.warn > 0 ? 2 : 3;
       const rows = Object.values(map).sort((a, b) => rank(a) - rank(b) || b.danger - a.danger || b.warn - a.warn || b.total - a.total || a.name.localeCompare(b.name, "ko-KR"));
       const target = document.getElementById("districtMap");
       if (!rows.length) {
-        target.innerHTML = '<div class="district-empty">\uD45C\uC2DC\uD560 \uC4F0\uB808\uAE30\uD1B5 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+        const emptyText = filterType === "danger" ? "위험 상태의 쓰레기통이 없습니다." : filterType === "warn" ? "주의 상태의 쓰레기통이 없습니다." : filterType === "good" ? "정상 상태의 쓰레기통이 없습니다." : "표시할 쓰레기통 데이터가 없습니다.";
+        target.innerHTML = '<div class="district-empty">' + emptyText + '</div>';
         return;
       }
+
       target.innerHTML = rows.map((item) => {
-        const status = dashboardDistrictStatus(item);
+        const status = filterType === "all" ? dashboardDistrictStatus(item) : filterType;
         const iconType = status === "warn" ? "warning" : status;
-        const top = item.samples.find((row) => dashboardStatusOf(row) === "danger") || item.samples.find((row) => dashboardStatusOf(row) === "warn") || item.samples[0];
-        return '<div class="district-card ' + status + '" data-status="' + status + '" onclick="location.href=\'/realtime?gun=' + encodeURIComponent(item.name) + '\'">' +
+        const top = item.samples.find((row) => dashboardStatusOf(row) === status) || item.samples[0];
+        const counts = filterType === "all"
+          ? '<span class="d">위험 <b>' + item.danger + '</b></span><span class="w">주의 <b>' + item.warn + '</b></span><span class="g">정상 <b>' + item.good + '</b></span><span>전체 <b>' + item.total + '</b></span>'
+          : '<span class="' + (status === "danger" ? "d" : status === "warn" ? "w" : "g") + '">' + dashboardDistrictLabel(status) + ' <b>' + item.total + '</b></span>';
+        const locationHtml = '<div class="district-locations">' + item.samples.slice(0, 3).map((row) => '<div class="district-location"><b>#' + String(row.bin_id).padStart(2, "0") + '</b><span>' + (row.bin_loc || "-") + '</span></div>').join("") + (item.samples.length > 3 ? '<div class="district-location-more">외 ' + (item.samples.length - 3) + '개 더 보기</div>' : '') + '</div>';
+        return '<div class="district-card ' + status + '" data-status="' + status + '" onclick="location.href=\'/realtime?gun=' + encodeURIComponent(item.name) + '&status=' + encodeURIComponent(status) + '\'">' +
           '<div class="district-card-head"><div class="district-name">' + item.name + '</div><span class="district-badge ' + status + '"><i class="ti ' + dashboardAlertIcon(iconType) + '"></i>' + dashboardDistrictLabel(status) + '</span></div>' +
-          '<div class="district-counts"><span class="d">\uC704\uD5D8 <b>' + item.danger + '</b></span><span class="w">\uC8FC\uC758 <b>' + item.warn + '</b></span><span class="g">\uC815\uC0C1 <b>' + item.good + '</b></span><span>\uC804\uCCB4 <b>' + item.total + '</b></span></div>' +
-          '<div class="district-foot">\uC8FC\uC694 \uC704\uCE58: #' + String(top.bin_id).padStart(2, "0") + ' ' + (top.bin_loc || "-") + '</div>' +
+          '<div class="district-counts">' + counts + '</div>' +
+          locationHtml +
         '</div>';
       }).join("");
     }
@@ -578,21 +604,23 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       document.querySelector(".warn .stat-pct").textContent = bins.length ? ((warn / bins.length) * 100).toFixed(1) + "%" : "0%";
       document.querySelector(".good .stat-pct").textContent = bins.length ? ((good / bins.length) * 100).toFixed(1) + "%" : "0%";
 
-      renderDistrictMap(bins);
+      dashboardBins = bins;
+      document.querySelector(".district-dashboard").classList.add("compact");
+      renderDistrictMap(dashboardBins, dashboardCurrentFilter);
 
       document.querySelector(".side-alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").slice(0, 4).map((alert) => {
         const kind = alert.alert_type === "danger" ? "d" : alert.alert_type === "warning" ? "w" : "o";
-        return `<div class="side-alert-item ${alert.is_received === "Y" ? "read" : ""}"><div class="adot ${kind}"><i class="ti ${dashboardAlertIcon(alert.alert_type)}"></i></div><div style="flex:1;min-width:0"><div class="at ${kind}">${dashboardAlertTitle(alert.alert_type)}</div><div class="aloc">#${alert.bin_id} ${alert.bin_loc || ""}</div><div class="adesc">${alert.alert_msg || "센서 상태 정상"}</div></div><div class="atime">${dashboardTime(alert.alerted_at)}</div></div>`;
+        return `<div class="side-alert-item ${alert.is_received === "Y" ? "read" : ""}"><div class="adot ${kind}"><i class="ti ${dashboardAlertIcon(alert.alert_type)}"></i></div><div style="flex:1;min-width:0"><div class="at ${kind}">${dashboardAlertTitle(alert.alert_type)}</div><div class="aloc">#${displayBinId(alert)} ${alert.bin_loc || ""}</div><div class="adesc">${alert.alert_msg || "센서 상태 정상"}</div></div><div class="atime">${dashboardTime(alert.alerted_at)}</div></div>`;
       }).join("");
 
       document.querySelector(".alert-dropdown .alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").slice(0, 5).map((alert) => {
         const type = alert.alert_type === "normal" ? "success" : alert.alert_type;
-        return `<div class="alert-item ${type} ${alert.is_received === "Y" ? "read" : ""}"><div class="alert-icon"><i class="ti ${dashboardAlertIcon(alert.alert_type)}"></i></div><div class="alert-text"><strong>${dashboardAlertTitle(alert.alert_type)}</strong><span>#${alert.bin_id} ${alert.bin_loc || ""}</span><small>${alert.alert_msg || "센서 상태 정상"}</small></div><span class="alert-time">${dashboardTime(alert.alerted_at)}</span></div>`;
+        return `<div class="alert-item ${type} ${alert.is_received === "Y" ? "read" : ""}"><div class="alert-icon"><i class="ti ${dashboardAlertIcon(alert.alert_type)}"></i></div><div class="alert-text"><strong>${dashboardAlertTitle(alert.alert_type)}</strong><span>#${displayBinId(alert)} ${alert.bin_loc || ""}</span><small>${alert.alert_msg || "센서 상태 정상"}</small></div><span class="alert-time">${dashboardTime(alert.alerted_at)}</span></div>`;
       }).join("");
 
       document.querySelector(".all-alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").map((alert) => {
         const type = alert.alert_type === "normal" ? "success" : alert.alert_type;
-        return `<div class="all-alert-row ${type} ${alert.is_received === "Y" ? "read" : ""}"><div><strong>${dashboardAlertTitle(alert.alert_type)}</strong><span>#${alert.bin_id} ${alert.bin_loc || ""}</span></div><p>${alert.alert_msg || "센서 상태 정상"}</p><time>${dashboardTime(alert.alerted_at)}</time></div>`;
+        return `<div class="all-alert-row ${type} ${alert.is_received === "Y" ? "read" : ""}"><div><strong>${dashboardAlertTitle(alert.alert_type)}</strong><span>#${displayBinId(alert)} ${alert.bin_loc || ""}</span></div><p>${alert.alert_msg || "센서 상태 정상"}</p><time>${dashboardTime(alert.alerted_at)}</time></div>`;
       }).join("");
 
       const params = new URLSearchParams(location.search);
@@ -619,6 +647,13 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 
