@@ -132,11 +132,11 @@ async function saveThresholds() {
   alert(systemResult.success ? "설정이 저장되었습니다." : (systemResult.message || "AI 설정 저장에 실패했습니다."));
 }
 async function resetThresholds() {
-  if (!canEditThreshold) return alert("?댁쁺?먮쭔 珥덇린?뷀븷 ???덉뒿?덈떎.");
-  if (!confirm("?붿옱 媛먯? ?꾧퀎媛믪쓣 湲곕낯媛믪쑝濡?珥덇린?뷀븷源뚯슂?")) return;
+  if (!canEditThreshold) return alert("\uC6B4\uC601\uC790\uB9CC \uCD08\uAE30\uD654\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+  if (!confirm("\uD654\uC7AC \uAC10\uC9C0 \uC784\uACC4\uAC12\uC744 \uAE30\uBCF8\uAC12\uC73C\uB85C \uCD08\uAE30\uD654\uD560\uAE4C\uC694?")) return;
   const res = await fetch("/settings/api/thresholds/reset", { method: "POST" });
   const result = await res.json();
-  alert(result.message || (result.success ? "珥덇린?붾릺?덉뒿?덈떎." : "珥덇린?붿뿉 ?ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (result.success ? "\uCD08\uAE30\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uCD08\uAE30\uD654\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
   if (result.success) fillThresholds(result.thresholds);
 }
 
@@ -269,7 +269,7 @@ async function collectExportRows() {
 
 async function exportData(format) {
   const rows = await collectExportRows();
-  const lines = [["援щ텇", "ID", "?꾩튂", "?댁슜", "?곹깭", "?쒓컙"], ...rows.map((row) => [row.type, row.id, row.location, row.content, row.status, row.date])];
+  const lines = [["\uAD6C\uBD84", "ID", "\uC704\uCE58", "\uB0B4\uC6A9", "\uC0C1\uD0DC", "\uC2DC\uAC04"], ...rows.map((row) => [row.type, row.id, row.location, row.content, row.status, row.date])];
 
   if (format === "pdf") {
     const summary = rows.reduce((acc, row) => {
@@ -570,9 +570,20 @@ const topbarAllAlertOverlay = document.getElementById("topbarAllAlertOverlay");
 const topbarAllAlertList = document.getElementById("topbarAllAlertList");
 const topbarCloseAllAlertsBtn = document.getElementById("topbarCloseAllAlertsBtn");
 
+function topbarEscapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function topbarAlertTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleTimeString("ko-KR", {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -580,61 +591,92 @@ function topbarAlertTime(value) {
   });
 }
 
+function topbarAlertBinId(item) {
+  return String(item.display_bin_id || item.bin_id || "").padStart(2, "0");
+}
+
+function topbarAlertMessage(item) {
+  return item.alert_msg || "\uD654\uC7AC \uC704\uD5D8 \uAC10\uC9C0 - \uC989\uAC01 \uB300\uC751 \uD544\uC694";
+}
+
 function renderTopbarAlerts() {
   const dangerAlerts = topbarAlerts.filter((item) => item.alert_type === "danger");
   const unreadDanger = dangerAlerts.some((item) => item.is_received !== "Y");
+
   if (topbarAlertDot) topbarAlertDot.classList.toggle("hide", !unreadDanger);
   if (!topbarAlertList || !topbarAllAlertList) return;
+
   if (!dangerAlerts.length) {
-    topbarAlertList.innerHTML = '<div class="alert-empty">?꾪뿕 ?뚮┝???놁뒿?덈떎.</div>';
-    topbarAllAlertList.innerHTML = '<div class="alert-empty">?꾪뿕 ?뚮┝???놁뒿?덈떎.</div>';
+    const empty = '<div class="alert-empty">\uD45C\uC2DC\uD560 \uC704\uD5D8 \uC54C\uB9BC\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+    topbarAlertList.innerHTML = empty;
+    topbarAllAlertList.innerHTML = empty;
     return;
   }
-  topbarAlertList.innerHTML = dangerAlerts.slice(0, 5).map((item) =>
-    '<div class="alert-item danger ' + (item.is_received === "Y" ? "read" : "") + '">' +
+
+  topbarAlertList.innerHTML = dangerAlerts.slice(0, 5).map((item) => {
+    const isRead = item.is_received === "Y";
+    const binId = topbarEscapeHtml(topbarAlertBinId(item));
+    const location = topbarEscapeHtml(item.bin_loc || "");
+    const message = topbarEscapeHtml(topbarAlertMessage(item));
+    const time = topbarAlertTime(item.alerted_at);
+    return '<div class="alert-item danger ' + (isRead ? "read" : "") + '">' +
       '<div class="alert-icon"><i class="ti ti-flame"></i></div>' +
-      '<div class="alert-text"><strong>?꾪뿕 媛먯?</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span><small>' + (item.alert_msg || "?붿옱 ?꾪뿕 媛먯?") + '</small></div>' +
-      '<span class="alert-time">' + topbarAlertTime(item.alerted_at) + '</span>' +
-    '</div>'
-  ).join("");
-  topbarAllAlertList.innerHTML = dangerAlerts.map((item) =>
-    '<div class="all-alert-row danger ' + (item.is_received === "Y" ? "read" : "") + '">' +
-      '<div><strong>?꾪뿕 媛먯?</strong><span>#' + item.bin_id + ' ' + (item.bin_loc || "") + '</span></div>' +
-      '<p>' + (item.alert_msg || "?붿옱 ?꾪뿕 媛먯?") + '</p>' +
-      '<time>' + topbarAlertTime(item.alerted_at) + '</time>' +
-    '</div>'
-  ).join("");
+      '<div class="alert-text"><strong>\uC704\uD5D8 \uAC10\uC9C0</strong><span>#' + binId + ' ' + location + '</span><small>' + message + '</small></div>' +
+      '<span class="alert-time">' + time + '</span>' +
+    '</div>';
+  }).join("");
+
+  topbarAllAlertList.innerHTML = dangerAlerts.map((item) => {
+    const isRead = item.is_received === "Y";
+    const binId = topbarEscapeHtml(topbarAlertBinId(item));
+    const location = topbarEscapeHtml(item.bin_loc || "");
+    const message = topbarEscapeHtml(topbarAlertMessage(item));
+    const time = topbarAlertTime(item.alerted_at);
+    return '<div class="all-alert-row danger ' + (isRead ? "read" : "") + '">' +
+      '<div><strong>\uC704\uD5D8 \uAC10\uC9C0</strong><span>#' + binId + ' ' + location + '</span></div>' +
+      '<p>' + message + '</p>' +
+      '<time>' + time + '</time>' +
+    '</div>';
+  }).join("");
 }
 
 async function loadTopbarAlerts() {
   try {
     const response = await fetch("/alerts/list");
-    topbarAlerts = fidsApplyAlertReadState(await response.json());
-    if (!Array.isArray(topbarAlerts)) topbarAlerts = [];
+    const rows = await response.json();
+    topbarAlerts = fidsApplyAlertReadState(Array.isArray(rows) ? rows : []);
   } catch (error) {
     topbarAlerts = [];
   }
   renderTopbarAlerts();
 }
 
-if (topbarAlertButton) {
-  topbarAlertButton.addEventListener("click", (event) => {
+if (topbarAlertButton && topbarAlertDropdown) {
+  topbarAlertButton.onclick = (event) => {
     event.stopPropagation();
     topbarAlertDropdown.classList.toggle("open");
-  });
-  topbarReadAllBtn.addEventListener("click", async () => {
-    fidsMarkAlertsRead();
-    await fetch("/alerts/read-all", { method: "POST" });
-    await loadTopbarAlerts();
-  });
-  topbarOpenAllAlertsBtn.addEventListener("click", () => {
-    topbarAlertDropdown.classList.remove("open");
-    topbarAllAlertOverlay.classList.add("open");
-  });
-  topbarCloseAllAlertsBtn.addEventListener("click", () => topbarAllAlertOverlay.classList.remove("open"));
-  topbarAllAlertOverlay.addEventListener("click", (event) => {
-    if (event.target === topbarAllAlertOverlay) topbarAllAlertOverlay.classList.remove("open");
-  });
+  };
+  if (topbarReadAllBtn) {
+    topbarReadAllBtn.onclick = async () => {
+      fidsMarkAlertsRead();
+      await fetch("/alerts/read-all", { method: "POST" });
+      await loadTopbarAlerts();
+    };
+  }
+  if (topbarOpenAllAlertsBtn && topbarAllAlertOverlay) {
+    topbarOpenAllAlertsBtn.onclick = () => {
+      topbarAlertDropdown.classList.remove("open");
+      topbarAllAlertOverlay.classList.add("open");
+    };
+  }
+  if (topbarCloseAllAlertsBtn && topbarAllAlertOverlay) {
+    topbarCloseAllAlertsBtn.onclick = () => topbarAllAlertOverlay.classList.remove("open");
+  }
+  if (topbarAllAlertOverlay) {
+    topbarAllAlertOverlay.onclick = (event) => {
+      if (event.target === topbarAllAlertOverlay) topbarAllAlertOverlay.classList.remove("open");
+    };
+  }
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".alert-area")) topbarAlertDropdown.classList.remove("open");
   });

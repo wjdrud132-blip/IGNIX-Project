@@ -228,7 +228,7 @@
               <button type="button" id="readAllBtn">모두 읽음</button>
             </div>
 
-            <div class="alert-list">
+            <div class="alert-list" id="alertList">
               <div class="alert-item danger">
                 <div class="alert-icon"><i class="ti ti-flame"></i></div>
                 <div class="alert-text">
@@ -319,10 +319,6 @@
         <div class="panel">
           <div class="panel-header"><div class="panel-title">최근 알림</div><div class="panel-more" id="sideOpenAllAlerts">더보기 →</div></div>
           <div class="side-alert-list">
-            <div class="side-alert-item"><div class="adot d"><i class="ti ti-flame"></i></div><div style="flex:1;min-width:0"><div class="at d">위험 감지</div><div class="aloc">#04 주차장 입구</div><div class="adesc">연기 감지값 350 / 온도 68.7°C</div></div><div class="atime">2026.05.29<br>14:30:10</div></div>
-            <div class="side-alert-item"><div class="adot w"><i class="ti ti-alert-triangle"></i></div><div style="flex:1;min-width:0"><div class="at w">주의 감지</div><div class="aloc">#03 놀이터 옆</div><div class="adesc">연기 감지값 120 / 온도 45.2°C</div></div><div class="atime">2026.05.29<br>14:30:15</div></div>
-            <div class="side-alert-item"><div class="adot w"><i class="ti ti-alert-triangle"></i></div><div style="flex:1;min-width:0"><div class="at w">주의 감지</div><div class="aloc">#07 운동장 입구</div><div class="adesc">연기 감지값 110 / 온도 43.5°C</div></div><div class="atime">2026.05.29<br>14:30:03</div></div>
-            <div class="side-alert-item"><div class="adot o"><i class="ti ti-check"></i></div><div style="flex:1;min-width:0"><div class="at o">정상 복귀</div><div class="aloc">#06 차고지 옆</div><div class="adesc">상태가 정상으로 복귀했습니다.</div></div><div class="atime">2026.05.29<br>14:29:58</div></div>
           </div>
         </div>
       </div>
@@ -343,7 +339,7 @@
         <div><h2>전체 알림</h2><p>최근 감지된 알림 내역입니다.</p></div>
         <button type="button" id="closeAllAlertsBtn">×</button>
       </div>
-      <div class="all-alert-list">
+      <div class="all-alert-list" id="allAlertList">
         <div class="all-alert-row danger"><div><strong>위험 감지</strong><span>#04 주차장 입구</span></div><p>연기감지값 350 / 온도 68.7°C</p><time>14:30:10</time></div>
         <div class="all-alert-row warning"><div><strong>주의 감지</strong><span>#03 놀이터 옆</span></div><p>연기감지값 120 / 온도 45.2°C</p><time>14:30:15</time></div>
         <div class="all-alert-row warning"><div><strong>주의 감지</strong><span>#07 운동장 입구</span></div><p>연기감지값 110 / 온도 43.5°C</p><time>14:30:03</time></div>
@@ -486,13 +482,36 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       return value === 1 ? "O" : "X";
     }
 
+    function dashboardAlertTimestamp(value) {
+      if (!value) return 0;
+      if (value instanceof Date) return value.getTime();
+      const raw = String(value).trim();
+      const direct = new Date(raw);
+      if (!Number.isNaN(direct.getTime())) return direct.getTime();
+      const normalized = raw.replace(/\./g, "-").replace(/\s+/g, " ");
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+      const numbers = raw.match(/\d+/g) || [];
+      if (numbers.length >= 3) {
+        const year = Number(numbers[0]);
+        const month = Number(numbers[1]) - 1;
+        const day = Number(numbers[2]);
+        const hour = Number(numbers[3] || 0);
+        const minute = Number(numbers[4] || 0);
+        const second = Number(numbers[5] || 0);
+        return new Date(year, month, day, hour, minute, second).getTime();
+      }
+      return 0;
+    }
+
     function dashboardTime(value) {
       if (!value) return "-";
-      return new Date(value).toLocaleTimeString("ko-KR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
+      const timestamp = dashboardAlertTimestamp(value);
+      if (!timestamp) return "-";
+      const date = new Date(timestamp);
+      const dateText = date.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\.\s?/g, ".").replace(/\.$/, "");
+      const timeText = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+      return dateText + "<br>" + timeText;
     }
 
     function dashboardAiSummary(row, status) {
@@ -579,6 +598,76 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       }).join("");
     }
 
+    function renderDashboardRecentAlerts(sourceRows) {
+      const list = document.querySelector(".side-alert-list");
+      if (!list) return;
+
+      const escapeHtml = (value) => String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+      const rowId = (row) => {
+        const value = row.display_bin_id || row.bin_id || row.sensor_id || "";
+        const number = String(value).replace(/[^0-9]/g, "");
+        return number ? number.padStart(2, "0") : String(value || "-");
+      };
+
+      const rowTimestamp = (row) => {
+        const raw = row.alerted_at || row.last_updated_at || row.updated_at || row.created_at || row.installed_at || "";
+        const parsed = new Date(raw);
+        if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+        const nums = String(raw).match(/\d+/g) || [];
+        if (nums.length >= 3) {
+          return new Date(Number(nums[0]), Number(nums[1]) - 1, Number(nums[2]), Number(nums[3] || 0), Number(nums[4] || 0), Number(nums[5] || 0)).getTime();
+        }
+        return 0;
+      };
+
+      const rowTime = (row) => {
+        const timestamp = rowTimestamp(row);
+        if (!timestamp) return "-";
+        const date = new Date(timestamp);
+        const dateText = date.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
+          .replace(/\.\s?/g, ".")
+          .replace(/\.$/, "");
+        const timeText = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+        return dateText + "<br>" + timeText;
+      };
+
+      const rows = (Array.isArray(sourceRows) ? sourceRows : [])
+        .filter((row) => row && (row.alert_type === "danger" || row.alert_type === "warning"))
+        .sort((a, b) => rowTimestamp(b) - rowTimestamp(a) || Number(a.bin_id || 0) - Number(b.bin_id || 0))
+        .slice(0, 5);
+
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty" style="padding:24px 0">??? ??/?? ??? ????.</div>';
+        return;
+      }
+
+      list.innerHTML = rows.map((row) => {
+        const isDanger = row.alert_type === "danger";
+        const kind = isDanger ? "d" : "w";
+        const icon = isDanger ? "ti-flame" : "ti-alert-triangle";
+        const title = isDanger ? "\uC704\uD5D8 \uAC10\uC9C0" : "\uC8FC\uC758 \uAC10\uC9C0";
+        let message = row.alert_msg || (isDanger ? "\uD654\uC7AC \uC704\uD5D8 \uAC10\uC9C0 - \uC989\uAC01 \uB300\uC751 \uD544\uC694" : "\uC628\uB3C4 \uBC0F \uC5F0\uAE30 \uC784\uACC4\uAC12 \uCD08\uACFC");
+        message = String(message)
+          .replace(/\uBD88\uAF43\s*\uAC10\uC9C0\s*1/g, "\uBD88\uAF43 \uAC10\uC9C0 O")
+          .replace(/\uBD88\uAF43\s*\uAC10\uC9C0\s*0/g, "\uBD88\uAF43 \uAC10\uC9C0 X");
+        return '<div class="side-alert-item">' +
+          '<div class="adot ' + kind + '"><i class="ti ' + icon + '"></i></div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="at ' + kind + '">' + title + '</div>' +
+            '<div class="aloc">#' + rowId(row) + ' ' + escapeHtml(row.bin_loc || '') + '</div>' +
+            '<div class="adesc">' + escapeHtml(message) + '</div>' +
+          '</div>' +
+          '<div class="atime">' + rowTime(row) + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
     let dashboardLastRefreshAt = new Date();
     async function loadDashboardData() {
       dashboardLastRefreshAt = new Date();
@@ -607,11 +696,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       dashboardBins = bins;
       document.querySelector(".district-dashboard").classList.add("compact");
       renderDistrictMap(dashboardBins, dashboardCurrentFilter);
-
-      document.querySelector(".side-alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").slice(0, 4).map((alert) => {
-        const kind = alert.alert_type === "danger" ? "d" : alert.alert_type === "warning" ? "w" : "o";
-        return `<div class="side-alert-item ${alert.is_received === "Y" ? "read" : ""}"><div class="adot ${kind}"><i class="ti ${dashboardAlertIcon(alert.alert_type)}"></i></div><div style="flex:1;min-width:0"><div class="at ${kind}">${dashboardAlertTitle(alert.alert_type)}</div><div class="aloc">#${displayBinId(alert)} ${alert.bin_loc || ""}</div><div class="adesc">${alert.alert_msg || "센서 상태 정상"}</div></div><div class="atime">${dashboardTime(alert.alerted_at)}</div></div>`;
-      }).join("");
+      renderDashboardRecentAlerts(alerts);
 
       document.querySelector(".alert-dropdown .alert-list").innerHTML = alerts.filter((alert) => alert.alert_type === "danger").slice(0, 5).map((alert) => {
         const type = alert.alert_type === "normal" ? "success" : alert.alert_type;
@@ -637,6 +722,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     loadDashboardData();
   </script>
   <script src="/js/fire-alert.js"></script>
+  <script src="/js/topbar-alert.js"></script>
 <script>document.querySelectorAll(".operator-menu").forEach((item)=>{item.style.display=sessionStorage.getItem("role")==="operator"?"flex":"none";});</script>
 <script>
   window.addEventListener("pageshow", function () {

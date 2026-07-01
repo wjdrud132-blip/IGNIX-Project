@@ -142,6 +142,7 @@
     .all-alert-row time{text-align:right;color:#94a3b8;}
 
   </style>
+  <link rel="stylesheet" href="/css/fire-alert.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -301,8 +302,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 
     function parseFlame(row) {
       const match = String(row.alert_msg || "").match(/불꽃\s*감지\s*(0|1)/);
-      if (row.alert_type === "danger") return "1";
-      return match ? match[1] : String(fallbackSensorValues(row).flame);
+      const value = row.alert_type === "danger" ? 1 : (match ? Number(match[1]) : Number(fallbackSensorValues(row).flame));
+      return value === 1 ? "O" : "X";
     }
 
     function timeOnly(value) { if (!value) return "-"; const date = new Date(value); return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") + ":" + String(date.getSeconds()).padStart(2, "0"); }
@@ -469,7 +470,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       if (selectedFormat === "pdf") {
         let bodyRows = "";
         rows.forEach((row) => { bodyRows += `<tr class="${row.alert_type === "danger" ? "danger" : ""}"><td>${typeLabel(row.alert_type)}</td><td>#${displayBinId(row)}</td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td>${isRowRead(row) ? "처리 완료" : "미처리"}</td></tr>`; });
-        const html = `<html><head><title>FIDS 알림 기록</title><style>body{font-family:Arial,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}.danger{color:#dc2626;font-weight:700}</style></head><body><h2>FIDS 알림 기록</h2><table><thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기</th><th>불꽃</th><th>발생 시간</th><th>처리 상태</th></tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+        const html = `<html><head><title>FIDS 알림 기록</title><style>body{font-family:Arial,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}.danger{color:#dc2626;font-weight:700}</style></head><body><h2>FIDS 알림 기록</h2><table><thead><tr><th>유형</th><th>센서 ID</th><th>설치 위치</th><th>내용</th><th>온도</th><th>연기</th><th>불꽃</th><th>발생 시간</th><th>처리 상태</th></tr></thead><tbody>${bodyRows}</tbody></table>
+</body></html>`;
         const popup = window.open("", "_blank"); popup.document.write(html); popup.document.close(); popup.print(); closeExportModal(); return;
       }
       if (selectedFormat === "excel") {
@@ -588,6 +590,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     }
   });
 </script>
+  <script src="/js/fire-alert.js"></script>
+  <script src="/js/topbar-alert.js"></script>
 </body>
 </html>
 

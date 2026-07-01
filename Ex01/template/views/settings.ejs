@@ -157,15 +157,6 @@
 </head>
 <body>
   <% const pageUser = typeof currentUser !== "undefined" ? currentUser : {}; %>
-<div class="all-alert-overlay" id="topbarAllAlertOverlay">
-    <div class="all-alert-modal">
-      <div class="all-alert-header">
-        <div><h2>전체 알림</h2><p>최근 위험 알림 내역입니다.</p></div>
-        <button type="button" id="topbarCloseAllAlertsBtn">×</button>
-      </div>
-      <div class="all-alert-list" id="topbarAllAlertList"></div>
-    </div>
-  </div>
   <script>
 const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
 window.__FIDS_USER__ = <%- JSON.stringify(pageUser) %>;</script>
@@ -209,6 +200,7 @@ window.__FIDS_USER__ = <%- JSON.stringify(pageUser) %>;</script>
   </div>
   <script src="/js/settings.js"></script>
   <script src="/js/fire-alert.js"></script>
+  <script src="/js/topbar-alert.js"></script>
 
 <script>
   window.addEventListener("pageshow", function () {
