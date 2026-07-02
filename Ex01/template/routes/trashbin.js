@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
@@ -73,6 +73,65 @@ function rowForCurrentSensor(row) {
     flame_value: null,
     fire_risk: null,
   };
+}
+
+function queryAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    conn.query(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+}
+
+function alertMessageFor(row) {
+  if (row.alert_type === "danger") return "화재 위험 감지 - 즉각 대응 필요";
+  if (row.alert_type === "warning") return "온도 및 연기 임계값 초과";
+  return "";
+}
+
+async function saveSensorAlertIfNeeded(row) {
+  if (!row || row.sensor_online !== "Y") return;
+  if (row.alert_type !== "danger" && row.alert_type !== "warning") return;
+  if (!row.bin_id || !row.sensor_created_at || !row.mgr_id) return;
+
+  const exists = await queryAsync(
+    `SELECT alert_id
+     FROM t_alert
+     WHERE bin_id = ?
+       AND alert_type = ?
+       AND alerted_at = ?
+     LIMIT 1`,
+    [row.bin_id, row.alert_type, row.sensor_created_at]
+  );
+
+  if (exists.length) return;
+
+  await queryAsync(
+    `INSERT INTO t_alert
+      (bin_id, alert_type, alert_msg, alerted_at, is_received, received_at, mgr_id)
+     VALUES
+      (?, ?, ?, ?, 'N', ?, ?)`,
+    [
+      row.bin_id,
+      row.alert_type,
+      alertMessageFor(row),
+      row.sensor_created_at,
+      row.sensor_created_at,
+      row.mgr_id,
+    ]
+  );
+}
+
+async function saveSensorAlerts(judgedRows) {
+  const targets = judgedRows.filter((row) => row.alert_type === "danger" || row.alert_type === "warning");
+  for (const row of targets) {
+    try {
+      await saveSensorAlertIfNeeded(row);
+    } catch (err) {
+      console.error("센서 알림 기록 저장 실패:", err);
+    }
+  }
 }
 
 router.get("/list", (req, res) => {
@@ -183,7 +242,7 @@ router.get("/list", (req, res) => {
             const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
             return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
           });
-          res.json(judgedRows);
+          saveSensorAlerts(judgedRows).finally(() => res.json(judgedRows));
         });
       });
     });

@@ -1,33 +1,27 @@
-﻿const LIVE_DANGER_ACTIVE_KEY = "fidsLiveDangerActiveBins";
+const LIVE_DANGER_STATUS_KEY = "fidsLiveDangerStatusByBin";
 const FIRE_ALERT_POLL_MS = 3000;
 
-function loadActiveDangerBins() {
+function loadDangerStatusByBin() {
   try {
-    return JSON.parse(sessionStorage.getItem(LIVE_DANGER_ACTIVE_KEY) || "{}");
+    return JSON.parse(sessionStorage.getItem(LIVE_DANGER_STATUS_KEY) || "{}");
   } catch (error) {
     return {};
   }
 }
 
-function saveActiveDangerBins(activeBins) {
-  sessionStorage.setItem(LIVE_DANGER_ACTIVE_KEY, JSON.stringify(activeBins));
+function saveDangerStatusByBin(statusByBin) {
+  sessionStorage.setItem(LIVE_DANGER_STATUS_KEY, JSON.stringify(statusByBin));
 }
 
 function isLiveDangerBin(bin) {
   return String(bin.sensor_online || "") === "Y" && String(bin.alert_type || "") === "danger";
 }
 
-function syncActiveDangerBins(dangerRows) {
-  const activeBins = loadActiveDangerBins();
-  const currentDangerIds = new Set(dangerRows.map((bin) => String(bin.bin_id)));
-
-  Object.keys(activeBins).forEach((binId) => {
-    if (!currentDangerIds.has(binId)) {
-      delete activeBins[binId];
-    }
-  });
-
-  return activeBins;
+function binStatusOf(bin) {
+  if (isLiveDangerBin(bin)) return "danger";
+  if (String(bin.sensor_online || "") === "N" || Number(bin.network_status) === 0) return "offline";
+  if (String(bin.alert_type || "") === "warning") return "warning";
+  return "normal";
 }
 
 function toDangerAlert(bin) {
@@ -58,26 +52,25 @@ async function checkDangerAlert() {
 
     const response = await fetch("/trashbins/list", { cache: "no-store" });
     const rows = await response.json();
-    const dangerRows = Array.isArray(rows)
-      ? rows.filter(isLiveDangerBin).sort(sortDangerByLatest)
-      : [];
+    const bins = Array.isArray(rows) ? rows : [];
+    const previousStatusByBin = loadDangerStatusByBin();
+    const nextStatusByBin = { ...previousStatusByBin };
 
-    const activeBins = syncActiveDangerBins(dangerRows);
+    bins.forEach((bin) => {
+      if (bin && bin.bin_id !== undefined && bin.bin_id !== null) {
+        nextStatusByBin[String(bin.bin_id)] = binStatusOf(bin);
+      }
+    });
 
-    if (!dangerRows.length) {
-      saveActiveDangerBins(activeBins);
-      return;
-    }
+    const dangerRows = bins.filter(isLiveDangerBin).sort(sortDangerByLatest);
+    const newDanger = dangerRows.find((bin) => previousStatusByBin[String(bin.bin_id)] !== "danger");
 
-    const newDanger = dangerRows.find((bin) => !activeBins[String(bin.bin_id)]);
+    saveDangerStatusByBin(nextStatusByBin);
 
     if (!newDanger) {
-      saveActiveDangerBins(activeBins);
       return;
     }
 
-    activeBins[String(newDanger.bin_id)] = true;
-    saveActiveDangerBins(activeBins);
     showDangerModal(toDangerAlert(newDanger));
   } catch (error) {
     console.error("실시간 위험 상태 확인 실패:", error);
@@ -90,7 +83,7 @@ function parseAlertValue(alert, key) {
   }
 
   if (key === "smoke" && alert.smoke_value !== undefined && alert.smoke_value !== null && alert.smoke_value !== "") {
-    return alert.smoke_value + " (위험)";
+    return String(alert.smoke_value);
   }
 
   const msg = String(alert.alert_msg || "");
@@ -102,7 +95,7 @@ function parseAlertValue(alert, key) {
 
   if (key === "smoke") {
     const match = msg.match(/연기\s*감지값\s*(\d+(?:\.\d+)?)/);
-    return match ? match[1] + " (위험)" : "-";
+    return match ? match[1] : "-";
   }
 
   return "-";

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -265,9 +265,10 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
     $("logoutBtn").onclick = () => { sessionStorage.clear(); alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4."); location.replace("/"); };
 
     function setDefaultAlertPeriod() {
-      const defaults = { start: "2026-05-01", end: "2026-06-30" };
-      ["startDateInput", "exportStartDate"].forEach((id) => { const el = $(id); if (el && !el.value) el.value = defaults.start; });
-      ["endDateInput", "exportEndDate"].forEach((id) => { const el = $(id); if (el && !el.value) el.value = defaults.end; });
+      ["startDateInput", "endDateInput", "exportStartDate", "exportEndDate"].forEach((id) => {
+        const el = $(id);
+        if (el) el.value = "";
+      });
     }
 
     function setNowText() {
