@@ -98,7 +98,7 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
     return {
       available: false,
       sampleCount: samples.length,
-      reason: "t_sensor 학습 데이터의 정상/주의/위험 구분이 부족해 기존 임계값 기준을 사용합니다.",
+      reason: "임계값 판단에 필요한 정상/주의/위험 구분이 부족해 기존 임계값 기준을 사용합니다.",
     };
   }
 
@@ -170,20 +170,20 @@ function judgeWithModel(row, sensor, model) {
   if (isNumber(smoke)) {
     if (smoke >= model.dangerSmoke) {
       dangerScore += 3;
-      reasons.push("t_sensor 학습 데이터 기준으로 연기값이 위험 구간에 있습니다.");
+      reasons.push("임계값 기준으로 연기값이 위험 구간에 있습니다.");
     } else if (smoke >= adaptiveWarningSmoke) {
       warningScore += 2;
-      reasons.push("t_sensor 학습 데이터 기준으로 연기값이 주의 구간에 있습니다.");
+      reasons.push("임계값 기준으로 연기값이 주의 구간에 있습니다.");
     }
   }
 
   if (isNumber(temp)) {
     if (temp >= model.dangerTemp) {
       dangerScore += 2;
-      reasons.push("t_sensor 학습 데이터 기준으로 온도가 위험 구간에 있습니다.");
+      reasons.push("임계값 기준으로 온도가 위험 구간에 있습니다.");
     } else if (temp >= adaptiveWarningTemp) {
       warningScore += 1;
-      reasons.push("t_sensor 학습 데이터 기준으로 온도가 평소보다 높은 구간입니다.");
+      reasons.push("임계값 기준으로 온도가 평소보다 높은 구간입니다.");
     }
   }
 
@@ -209,7 +209,7 @@ function judgeWithModel(row, sensor, model) {
   else if (warningScore >= 1) status = "warning";
 
   if (status === "normal") {
-    reasons.push("t_sensor 학습 데이터 기준으로 정상 범위입니다.");
+    reasons.push("임계값 기준으로 정상 범위입니다.");
   }
 
   return {
@@ -313,5 +313,6 @@ module.exports = {
   parseSensorValues,
   trainSensorModel,
 };
+
 
 
