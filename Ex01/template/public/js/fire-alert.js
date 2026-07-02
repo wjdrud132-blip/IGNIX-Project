@@ -1,52 +1,110 @@
-﻿let lastAlertId = sessionStorage.getItem("lastShownAlertId");
+﻿const LIVE_DANGER_ACTIVE_KEY = "fidsLiveDangerActiveBins";
+const FIRE_ALERT_POLL_MS = 3000;
 
-async function rememberCurrentDangerAlert() {
+function loadActiveDangerBins() {
   try {
-    const response = await fetch("/alerts/danger/latest");
-    const data = await response.json();
-
-    if (data.hasDanger && data.alert_id && !lastAlertId) {
-      lastAlertId = data.alert_id;
-      sessionStorage.setItem("lastShownAlertId", data.alert_id);
-    }
+    return JSON.parse(sessionStorage.getItem(LIVE_DANGER_ACTIVE_KEY) || "{}");
   } catch (error) {
-    console.error("현재 위험 알림 기준값 저장 실패:", error);
+    return {};
   }
+}
+
+function saveActiveDangerBins(activeBins) {
+  sessionStorage.setItem(LIVE_DANGER_ACTIVE_KEY, JSON.stringify(activeBins));
+}
+
+function isLiveDangerBin(bin) {
+  return String(bin.sensor_online || "") === "Y" && String(bin.alert_type || "") === "danger";
+}
+
+function syncActiveDangerBins(dangerRows) {
+  const activeBins = loadActiveDangerBins();
+  const currentDangerIds = new Set(dangerRows.map((bin) => String(bin.bin_id)));
+
+  Object.keys(activeBins).forEach((binId) => {
+    if (!currentDangerIds.has(binId)) {
+      delete activeBins[binId];
+    }
+  });
+
+  return activeBins;
+}
+
+function toDangerAlert(bin) {
+  return {
+    bin_id: bin.bin_id,
+    location: bin.bin_loc || bin.location || "-",
+    alerted_at: bin.sensor_created_at || bin.alerted_at || new Date().toISOString(),
+    temp_value: bin.temp_value,
+    smoke_value: bin.smoke_value,
+    flame_value: bin.flame_value,
+    alert_msg: bin.alert_msg || "",
+  };
+}
+
+function sortDangerByLatest(a, b) {
+  const aTime = new Date(a.sensor_created_at || a.alerted_at || 0).getTime();
+  const bTime = new Date(b.sensor_created_at || b.alerted_at || 0).getTime();
+
+  if (bTime !== aTime) return bTime - aTime;
+  return Number(a.bin_id || 0) - Number(b.bin_id || 0);
 }
 
 async function checkDangerAlert() {
   try {
-    const response = await fetch("/alerts/danger/latest");
-    const data = await response.json();
-
-    if (!data.hasDanger || !data.alert_id) {
+    if (document.querySelector(".fire-alert-overlay")) {
       return;
     }
 
-    if (String(data.alert_id) === String(lastAlertId)) {
+    const response = await fetch("/trashbins/list", { cache: "no-store" });
+    const rows = await response.json();
+    const dangerRows = Array.isArray(rows)
+      ? rows.filter(isLiveDangerBin).sort(sortDangerByLatest)
+      : [];
+
+    const activeBins = syncActiveDangerBins(dangerRows);
+
+    if (!dangerRows.length) {
+      saveActiveDangerBins(activeBins);
       return;
     }
 
-    lastAlertId = data.alert_id;
-    sessionStorage.setItem("lastShownAlertId", data.alert_id);
-    showDangerModal(data);
+    const newDanger = dangerRows.find((bin) => !activeBins[String(bin.bin_id)]);
+
+    if (!newDanger) {
+      saveActiveDangerBins(activeBins);
+      return;
+    }
+
+    activeBins[String(newDanger.bin_id)] = true;
+    saveActiveDangerBins(activeBins);
+    showDangerModal(toDangerAlert(newDanger));
   } catch (error) {
-    console.error("위험 알림 확인 실패:", error);
+    console.error("실시간 위험 상태 확인 실패:", error);
   }
 }
 
 function parseAlertValue(alert, key) {
-  if (key === "temp" && alert.temp_value !== undefined && alert.temp_value !== null && alert.temp_value !== "") return alert.temp_value + "\u00B0C";
-  if (key === "smoke" && alert.smoke_value !== undefined && alert.smoke_value !== null && alert.smoke_value !== "") return alert.smoke_value + " (\uC704\uD5D8)";
+  if (key === "temp" && alert.temp_value !== undefined && alert.temp_value !== null && alert.temp_value !== "") {
+    return alert.temp_value + "\u00B0C";
+  }
+
+  if (key === "smoke" && alert.smoke_value !== undefined && alert.smoke_value !== null && alert.smoke_value !== "") {
+    return alert.smoke_value + " (위험)";
+  }
+
   const msg = String(alert.alert_msg || "");
+
   if (key === "temp") {
-    const match = msg.match(/\uC628\uB3C4\s*([0-9.]+)/);
+    const match = msg.match(/온도\s*([0-9.]+)/);
     return match ? match[1] + "\u00B0C" : "-";
   }
+
   if (key === "smoke") {
-    const match = msg.match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+(?:\.\d+)?)/);
-    return match ? match[1] + " (\uC704\uD5D8)" : "-";
+    const match = msg.match(/연기\s*감지값\s*(\d+(?:\.\d+)?)/);
+    return match ? match[1] + " (위험)" : "-";
   }
+
   return "-";
 }
 
@@ -107,14 +165,8 @@ function showDangerModal(alert) {
   });
 
   overlay.querySelector(".fire-move-btn").addEventListener("click", () => {
-    if (alert.alert_id) {
-      lastAlertId = alert.alert_id;
-      sessionStorage.setItem("lastShownAlertId", alert.alert_id);
-    }
-
     overlay.remove();
-
-    location.href = "/realtime?bin_id=" + alert.bin_id;
+    location.href = "/realtime?bin_id=" + encodeURIComponent(alert.bin_id);
   });
 }
 
@@ -143,7 +195,4 @@ function formatDate(value) {
 }
 
 checkDangerAlert();
-setInterval(checkDangerAlert, 10000);
-
-
-
+setInterval(checkDangerAlert, FIRE_ALERT_POLL_MS);

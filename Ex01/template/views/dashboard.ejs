@@ -93,7 +93,7 @@
     .bot-icon { font-size: 24px; color: #bbb; }
     .bot-label { font-size: 11px; color: #bbb; }
     .bot-val { font-size: 14px; font-weight: 700; margin-top: 2px; }
-    .bot-val.ok { color: #22a06b; } .bot-val.blue { color: #2d6be4; }
+    .bot-val.ok { color: #22a06b; } .bot-val.blue { color: #2d6be4; } .bot-val.warn { color: #d97706; }
     .sep { width: 1px; height: 36px; background: #f0f0f0; }
 
     .alert-area { position: relative; }
@@ -148,7 +148,7 @@
     .district-legend { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
     .district-legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #64748b; font-weight: 700; }
     .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-    .legend-dot.danger { background: #ef4444; } .legend-dot.warn { background: #f59e0b; } .legend-dot.good { background: #22c55e; }
+    .legend-dot.danger { background: #ef4444; } .legend-dot.warn { background: #f59e0b; } .legend-dot.good { background: #22c55e; } .legend-dot.offline { background: #94a3b8; }
     .district-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
     .district-card { min-height: 92px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 13px 14px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
     .district-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15, 23, 42, .08); }
@@ -156,16 +156,18 @@
     .district-card.danger { background: #fff5f5; border-color: #fecaca; }
     .district-card.warn { background: #fffbeb; border-color: #fde68a; }
     .district-card.good { background: #f0fdf4; border-color: #bbf7d0; }
+    .district-card.offline { background: #f8fafc; border-color: #cbd5e1; }
     .district-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .district-name { font-size: 15px; font-weight: 900; color: #10172f; }
     .district-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 900; }
     .district-badge.danger { background: #fee2e2; color: #dc2626; }
     .district-badge.warn { background: #fef3c7; color: #b45309; }
     .district-badge.good { background: #dcfce7; color: #15803d; }
+    .district-badge.offline { background: #e2e8f0; color: #475569; }
     .district-counts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .district-counts span { font-size: 11px; color: #64748b; font-weight: 800; }
     .district-counts b { margin-left: 3px; }
-    .district-counts .d { color: #dc2626; } .district-counts .w { color: #d97706; } .district-counts .g { color: #15803d; }
+    .district-counts .d { color: #dc2626; } .district-counts .w { color: #d97706; } .district-counts .g { color: #15803d; } .district-counts .o { color: #64748b; }
     .district-foot { margin-top: 10px; font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .district-locations { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
     .district-location { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11px; color: #64748b; }
@@ -416,6 +418,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
   </script>
   <script>
     function dashboardStatusOf(row) {
+      if (String(row.sensor_online || "") === "N" || Number(row.network_status) === 0) return "offline";
       if (row.alert_type === "danger") return "danger";
       if (row.alert_type === "warning") return "warn";
       return "good";
@@ -473,7 +476,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
     }
 
     function dashboardAiSummary(row, status) {
-      const aiLabel = status === "danger" ? "\uC704\uD5D8" : status === "warn" ? "\uC8FC\uC758" : "\uC815\uC0C1";
+      const aiLabel = status === "danger" ? "\uC704\uD5D8" : status === "warn" ? "\uC8FC\uC758" : status === "offline" ? "\uC624\uD504\uB77C\uC778" : "\uC815\uC0C1";
       const rule = row.rule_status ? (row.rule_status === "danger" ? "\uC704\uD5D8" : row.rule_status === "warning" ? "\uC8FC\uC758" : "\uC815\uC0C1") : aiLabel;
       const confidence = row.ai_confidence != null ? ` \u00B7 ${row.ai_confidence}%` : "";
       return `\uAE30\uC874 ${rule} \u2192 AI ${aiLabel}${confidence}`;
@@ -482,12 +485,13 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
     function dashboardAlertTitle(type) {
       if (type === "danger") return "위험 감지";
       if (type === "warning") return "주의 감지";
-      return "정상 복귀";
+      return "정상";
     }
 
     function dashboardAlertIcon(type) {
       if (type === "danger") return "ti-flame";
-      if (type === "warning") return "ti-alert-triangle";
+      if (type === "warning" || type === "warn") return "ti-alert-triangle";
+      if (type === "offline") return "ti-wifi-off";
       return "ti-check";
     }
 
@@ -504,12 +508,14 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
     function dashboardDistrictStatus(item) {
       if (item.danger > 0) return "danger";
       if (item.warn > 0) return "warn";
-      return "good";
+      if (item.good > 0) return "good";
+      return "offline";
     }
 
     function dashboardDistrictLabel(status) {
       if (status === "danger") return "\uC704\uD5D8";
       if (status === "warn") return "\uC8FC\uC758";
+      if (status === "offline") return "\uC624\uD504\uB77C\uC778";
       return "\uC815\uC0C1";
     }
 
@@ -521,21 +527,22 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
 
       visibleBins.forEach((row) => {
         const district = dashboardDistrictOf(row);
-        if (!map[district]) map[district] = { name: district, total: 0, danger: 0, warn: 0, good: 0, samples: [] };
+        if (!map[district]) map[district] = { name: district, total: 0, danger: 0, warn: 0, good: 0, offline: 0, samples: [] };
         const item = map[district];
         const status = dashboardStatusOf(row);
         item.total += 1;
         if (status === "danger") item.danger += 1;
         else if (status === "warn") item.warn += 1;
-        else item.good += 1;
+        else if (status === "good") item.good += 1;
+        else item.offline += 1;
         item.samples.push(row);
       });
 
-      const rank = (item) => item.danger > 0 ? 1 : item.warn > 0 ? 2 : 3;
+      const rank = (item) => item.danger > 0 ? 1 : item.warn > 0 ? 2 : item.good > 0 ? 3 : 4;
       const rows = Object.values(map).sort((a, b) => rank(a) - rank(b) || b.danger - a.danger || b.warn - a.warn || b.total - a.total || a.name.localeCompare(b.name, "ko-KR"));
       const target = document.getElementById("districtMap");
       if (!rows.length) {
-        const emptyText = filterType === "danger" ? "위험 상태의 쓰레기통이 없습니다." : filterType === "warn" ? "주의 상태의 쓰레기통이 없습니다." : filterType === "good" ? "정상 상태의 쓰레기통이 없습니다." : "표시할 쓰레기통 데이터가 없습니다.";
+        const emptyText = filterType === "danger" ? "위험 상태의 쓰레기통이 없습니다." : filterType === "warn" ? "주의 상태의 쓰레기통이 없습니다." : filterType === "good" ? "정상 상태의 쓰레기통이 없습니다." : filterType === "offline" ? "오프라인 상태의 쓰레기통이 없습니다." : "표시할 쓰레기통 데이터가 없습니다.";
         target.innerHTML = '<div class="district-empty">' + emptyText + '</div>';
         return;
       }
@@ -545,8 +552,8 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
         const iconType = status === "warn" ? "warning" : status;
         const top = item.samples.find((row) => dashboardStatusOf(row) === status) || item.samples[0];
         const counts = filterType === "all"
-          ? '<span class="d">위험 <b>' + item.danger + '</b></span><span class="w">주의 <b>' + item.warn + '</b></span><span class="g">정상 <b>' + item.good + '</b></span><span>전체 <b>' + item.total + '</b></span>'
-          : '<span class="' + (status === "danger" ? "d" : status === "warn" ? "w" : "g") + '">' + dashboardDistrictLabel(status) + ' <b>' + item.total + '</b></span>';
+          ? '<span class="d">위험 <b>' + item.danger + '</b></span><span class="w">주의 <b>' + item.warn + '</b></span><span class="g">정상 <b>' + item.good + '</b></span><span class="o">오프라인 <b>' + item.offline + '</b></span><span>전체 <b>' + item.total + '</b></span>'
+          : '<span class="' + (status === "danger" ? "d" : status === "warn" ? "w" : status === "offline" ? "o" : "g") + '">' + dashboardDistrictLabel(status) + ' <b>' + item.total + '</b></span>';
         const locationHtml = '<div class="district-locations">' + item.samples.slice(0, 3).map((row) => '<div class="district-location"><b>#' + String(row.bin_id).padStart(2, "0") + '</b><span>' + (row.bin_loc || "-") + '</span></div>').join("") + (item.samples.length > 3 ? '<div class="district-location-more">외 ' + (item.samples.length - 3) + '개 더 보기</div>' : '') + '</div>';
         return '<div class="district-card ' + status + '" data-status="' + status + '" onclick="location.href=\'/realtime?gun=' + encodeURIComponent(item.name) + '&status=' + encodeURIComponent(status) + '\'">' +
           '<div class="district-card-head"><div class="district-name">' + item.name + '</div><span class="district-badge ' + status + '"><i class="ti ' + dashboardAlertIcon(iconType) + '"></i>' + dashboardDistrictLabel(status) + '</span></div>' +
@@ -634,13 +641,14 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
       const bins = await binResponse.json();
       let alerts = await alertResponse.json();
       alerts = fidsApplyAlertReadState(alerts);
-      const sortRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : type === "normal" ? 3 : 4;
-      bins.sort((a, b) => sortRank(a.alert_type) - sortRank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id));
+      const sortRank = (type) => type === "danger" ? 1 : (type === "warning" || type === "warn") ? 2 : (type === "normal" || type === "good") ? 3 : 4;
+      bins.sort((a, b) => sortRank(dashboardStatusOf(a)) - sortRank(dashboardStatusOf(b)) || Number(a.bin_id) - Number(b.bin_id));
       alerts.sort((a, b) => sortRank(a.alert_type) - sortRank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id));
       alertDot.classList.toggle("hide", !alerts.some((alert) => alert.alert_type === "danger" && alert.is_received !== "Y"));
-      const danger = bins.filter((row) => row.alert_type === "danger").length;
-      const warn = bins.filter((row) => row.alert_type === "warning").length;
-      const good = bins.length - danger - warn;
+      const danger = bins.filter((row) => dashboardStatusOf(row) === "danger").length;
+      const warn = bins.filter((row) => dashboardStatusOf(row) === "warn").length;
+      const good = bins.filter((row) => dashboardStatusOf(row) === "good").length;
+      const offline = bins.filter((row) => dashboardStatusOf(row) === "offline").length;
       const statNums = document.querySelectorAll(".stat-num");
 
       statNums[0].textContent = bins.length;
@@ -650,6 +658,11 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
       document.querySelector(".danger .stat-pct").textContent = bins.length ? ((danger / bins.length) * 100).toFixed(1) + "%" : "0%";
       document.querySelector(".warn .stat-pct").textContent = bins.length ? ((warn / bins.length) * 100).toFixed(1) + "%" : "0%";
       document.querySelector(".good .stat-pct").textContent = bins.length ? ((good / bins.length) * 100).toFixed(1) + "%" : "0%";
+      const networkStatus = document.querySelector(".bottom-bar .bot-item:first-child .bot-val");
+      if (networkStatus) {
+        networkStatus.textContent = offline ? "오프라인 " + offline + "개" : "정상 연결";
+        networkStatus.className = "bot-val " + (offline ? "warn" : "ok");
+      }
 
       dashboardBins = bins;
       document.querySelector(".district-dashboard").classList.add("compact");
@@ -691,6 +704,9 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
 </script>
 </body>
 </html>
+
+
+
 
 
 
