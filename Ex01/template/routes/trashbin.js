@@ -36,7 +36,8 @@ function getSensorModel(thresholds, callback) {
   const sql = `
     SELECT bin_id, temp, gas, flame, fire_risk
     FROM t_sensor
-    WHERE fire_risk IS NOT NULL
+    WHERE temp IS NOT NULL
+      AND gas IS NOT NULL
   `;
 
   conn.query(sql, (err, rows) => {
@@ -90,7 +91,48 @@ function alertMessageFor(row) {
   return "";
 }
 
-async function saveSensorAlertIfNeeded(row) {
+function alertStatusRank(status) {
+  if (status === "danger") return 2;
+  if (status === "warning") return 1;
+  return 0;
+}
+
+function alertStatusOf(status) {
+  if (status === "danger" || status === "warning") return status;
+  return "normal";
+}
+
+async function getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel) {
+  const previousRows = await queryAsync(
+    `SELECT
+       temp AS temp_value,
+       gas AS smoke_value,
+       flame AS flame_value,
+       fire_risk,
+       created_at AS sensor_created_at
+     FROM t_sensor
+     WHERE bin_id = ?
+       AND created_at < ?
+     ORDER BY created_at DESC, sensor_id DESC
+     LIMIT 1`,
+    [row.bin_id, row.sensor_created_at]
+  );
+
+  if (!previousRows.length) return "normal";
+
+  const previous = previousRows[0];
+  const ruleStatus = previous.fire_risk === 2 ? "danger" : previous.fire_risk === 1 ? "warning" : "normal";
+  const ai = judgeDanger(
+    { ...previous, bin_id: row.bin_id, alert_type: ruleStatus, alert_msg: "" },
+    thresholds,
+    aiEnabled,
+    sensorModel
+  );
+
+  return alertStatusOf(ai.status);
+}
+
+async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) {
   if (!row || row.sensor_online !== "Y") return;
   if (row.alert_type !== "danger" && row.alert_type !== "warning") return;
   if (!row.bin_id || !row.sensor_created_at || !row.mgr_id) return;
@@ -106,6 +148,9 @@ async function saveSensorAlertIfNeeded(row) {
   );
 
   if (exists.length) return;
+
+  const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
+  if (previousStatus === row.alert_type) return;
 
   await queryAsync(
     `INSERT INTO t_alert
@@ -123,11 +168,14 @@ async function saveSensorAlertIfNeeded(row) {
   );
 }
 
-async function saveSensorAlerts(judgedRows) {
-  const targets = judgedRows.filter((row) => row.alert_type === "danger" || row.alert_type === "warning");
+async function saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel) {
+  const targets = judgedRows
+    .filter((row) => row.alert_type === "danger" || row.alert_type === "warning")
+    .sort((a, b) => alertStatusRank(b.alert_type) - alertStatusRank(a.alert_type) || new Date(a.sensor_created_at) - new Date(b.sensor_created_at));
+
   for (const row of targets) {
     try {
-      await saveSensorAlertIfNeeded(row);
+      await saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel);
     } catch (err) {
       console.error("센서 알림 기록 저장 실패:", err);
     }
@@ -242,7 +290,7 @@ router.get("/list", (req, res) => {
             const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
             return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
           });
-          saveSensorAlerts(judgedRows).finally(() => res.json(judgedRows));
+          saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel).finally(() => res.json(judgedRows));
         });
       });
     });

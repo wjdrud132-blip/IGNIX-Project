@@ -1,4 +1,4 @@
-﻿const defaultThresholds = Object.freeze({
+const defaultThresholds = Object.freeze({
   dangerTemp: 80,
   warningTemp: 55,
   dangerSmoke: 300,
@@ -86,18 +86,20 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
       flame: toNumber(row.flame),
       gas_change: toNumber(row.gas_change),
       temp_change: toNumber(row.temp_change),
-      risk: normalizeRisk(row.fire_risk),
+      risk: row.fire_risk === null || row.fire_risk === undefined || row.fire_risk === "" ? null : normalizeRisk(row.fire_risk),
     }))
     .filter((row) => isNumber(row.temp) && isNumber(row.smoke));
 
-  const risk0 = samples.filter((row) => row.risk === 0);
-  const risk1 = samples.filter((row) => row.risk === 1);
-  const risk2 = samples.filter((row) => row.risk === 2);
+  const labeledSamples = samples.filter((row) => row.risk !== null);
+  const risk0 = labeledSamples.filter((row) => row.risk === 0);
+  const risk1 = labeledSamples.filter((row) => row.risk === 1);
+  const risk2 = labeledSamples.filter((row) => row.risk === 2);
 
-  if (samples.length < 20 || new Set(samples.map((row) => row.risk)).size < 2) {
+  if (labeledSamples.length < 20 || new Set(labeledSamples.map((row) => row.risk)).size < 2) {
     return {
       available: false,
-      sampleCount: samples.length,
+      sampleCount: labeledSamples.length,
+      baselineSampleCount: samples.length,
       reason: "임계값 판단에 필요한 정상/주의/위험 구분이 부족해 기존 임계값 기준을 사용합니다.",
     };
   }
@@ -109,13 +111,19 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
   const warningTempStats = stats(risk1, "temp");
   const dangerTempStats = stats(risk2, "temp");
 
-  const warningSmoke = Math.max(0, midpoint(normalGas.p90, warningGas.p75, thresholds.warningSmoke));
-  const dangerSmoke = Math.max(warningSmoke + 1, midpoint(warningGas.p90, dangerGas.p75, thresholds.dangerSmoke));
-  const warningTemp = Math.max(0, midpoint(normalTempStats.p90, warningTempStats.p75, thresholds.warningTemp));
-  const dangerTemp = Math.max(warningTemp + 1, midpoint(warningTempStats.p90, dangerTempStats.p75, thresholds.dangerTemp));
+  const warningSmoke = Math.max(thresholds.warningSmoke, midpoint(normalGas.p90, warningGas.p75, thresholds.warningSmoke));
+  const dangerSmoke = Math.max(thresholds.dangerSmoke, warningSmoke + 1, midpoint(warningGas.p90, dangerGas.p75, thresholds.dangerSmoke));
+  const warningTemp = Math.max(thresholds.warningTemp, midpoint(normalTempStats.p90, warningTempStats.p75, thresholds.warningTemp));
+  const dangerTemp = Math.max(thresholds.dangerTemp, warningTemp + 1, midpoint(warningTempStats.p90, dangerTempStats.p75, thresholds.dangerTemp));
 
   const gasChangeP90 = percentile(samples.map((row) => row.gas_change), 90) ?? 0;
   const tempChangeP90 = percentile(samples.map((row) => row.temp_change), 90) ?? 0;
+
+  const ambientSmokeLimit = Math.max(thresholds.warningSmoke, percentile(samples.map((row) => row.smoke), 75) ?? thresholds.warningSmoke);
+  const ambientSamples = samples.filter((row) =>
+    isNumber(row.temp) && row.temp > 0 && row.temp < 60 &&
+    isNumber(row.smoke) && row.smoke > 0 && row.smoke <= ambientSmokeLimit
+  );
 
   const byBin = new Map();
   for (const row of samples) {
@@ -125,17 +133,23 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
 
   const binBaselines = {};
   for (const [binId, list] of byBin.entries()) {
-    const normalList = list.filter((row) => row.risk === 0);
-    const base = normalList.length >= 10 ? normalList : list;
+    const ambientList = ambientSamples.filter((row) => row.bin_id === binId);
+    const normalList = list.filter((row) => row.risk === 0 && row.temp > 0 && row.temp < 60);
+    const validList = list.filter((row) => row.temp > 0 && row.temp < 60);
+    const base = ambientList.length >= 20 ? ambientList : normalList.length >= 10 ? normalList : validList.length ? validList : list;
     binBaselines[binId] = {
       tempP95: percentile(base.map((row) => row.temp), 95),
+      tempP99: percentile(base.map((row) => row.temp), 99),
       smokeP95: percentile(base.map((row) => row.smoke), 95),
+      smokeP99: percentile(base.map((row) => row.smoke), 99),
+      sampleCount: base.length,
     };
   }
 
   return {
     available: true,
-    sampleCount: samples.length,
+    sampleCount: labeledSamples.length,
+    baselineSampleCount: samples.length,
     warningSmoke,
     dangerSmoke,
     warningTemp,
@@ -152,47 +166,59 @@ function judgeWithModel(row, sensor, model) {
   let warningScore = 0;
 
   const binBase = model.binBaselines && model.binBaselines[row.bin_id];
-  const adaptiveWarningSmoke = Math.max(model.warningSmoke, binBase && isNumber(binBase.smokeP95) ? binBase.smokeP95 : 0);
-  const adaptiveWarningTemp = Math.max(model.warningTemp, binBase && isNumber(binBase.tempP95) ? binBase.tempP95 : 0);
+  const baselineSmokeP95 = binBase && isNumber(binBase.smokeP95) ? binBase.smokeP95 : null;
+  const baselineTempP95 = binBase && isNumber(binBase.tempP95) ? binBase.tempP95 : null;
+  const adaptiveWarningSmoke = Math.max(model.warningSmoke, isNumber(baselineSmokeP95) ? baselineSmokeP95 + 10 : 0);
+  const adaptiveDangerSmoke = Math.max(model.dangerSmoke, adaptiveWarningSmoke + 80);
+  const adaptiveWarningTemp = Math.max(model.warningTemp, isNumber(baselineTempP95) ? baselineTempP95 + 6 : 0);
+  const adaptiveDangerTemp = Math.max(model.dangerTemp, isNumber(baselineTempP95) ? baselineTempP95 + 25 : 0);
   const smoke = sensor.smoke;
   const temp = sensor.temp;
   const flame = sensor.flame;
   const gasChange = firstNumber(row.gas_change, row.smoke_change, 0);
   const tempChange = firstNumber(row.temp_change, 0);
+  const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && gasChange >= model.gasChangeP90 && gasChange > 0;
+  const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && tempChange >= model.tempChangeP90 && tempChange > 0;
+  const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
 
   const flameIsUseful = flame === 1 && (
-    (isNumber(smoke) && smoke >= adaptiveWarningSmoke) ||
-    (isNumber(temp) && temp >= adaptiveWarningTemp) ||
-    (isNumber(gasChange) && gasChange >= model.gasChangeP90 && gasChange > 0) ||
-    (isNumber(tempChange) && tempChange >= model.tempChangeP90 && tempChange > 0)
+    smokeWarningLike ||
+    (isNumber(temp) && temp >= adaptiveDangerTemp && isNumber(smoke) && smoke >= adaptiveWarningSmoke * 0.8) ||
+    gasChangeHigh ||
+    tempChangeHigh
   );
 
   if (isNumber(smoke)) {
-    if (smoke >= model.dangerSmoke) {
+    if (smoke >= adaptiveDangerSmoke) {
       dangerScore += 3;
       reasons.push("임계값 기준으로 연기값이 위험 구간에 있습니다.");
-    } else if (smoke >= adaptiveWarningSmoke) {
+    } else if (smokeWarningLike) {
       warningScore += 2;
       reasons.push("임계값 기준으로 연기값이 주의 구간에 있습니다.");
     }
   }
 
   if (isNumber(temp)) {
-    if (temp >= model.dangerTemp) {
-      dangerScore += 2;
-      reasons.push("임계값 기준으로 온도가 위험 구간에 있습니다.");
+    if (temp >= adaptiveDangerTemp) {
+      if (smokeWarningLike || flameIsUseful || gasChangeHigh || tempChangeHigh) {
+        dangerScore += 2;
+        reasons.push("온도가 위험 구간이고 연기값 또는 센서 변화가 함께 감지되었습니다.");
+      } else {
+        warningScore += 1;
+        reasons.push("온도는 높지만 연기값이 낮아 햇빛/주변 환경 가능성을 고려해 주의로 관찰합니다.");
+      }
     } else if (temp >= adaptiveWarningTemp) {
       warningScore += 1;
       reasons.push("임계값 기준으로 온도가 평소보다 높은 구간입니다.");
     }
   }
 
-  if (isNumber(gasChange) && gasChange >= model.gasChangeP90 && gasChange > 0) {
+  if (gasChangeHigh) {
     warningScore += 1;
     reasons.push("연기값 증가폭이 학습 데이터의 상위 구간에 있습니다.");
   }
 
-  if (isNumber(tempChange) && tempChange >= model.tempChangeP90 && tempChange > 0) {
+  if (tempChangeHigh) {
     warningScore += 1;
     reasons.push("온도 증가폭이 학습 데이터의 상위 구간에 있습니다.");
   }

@@ -1,4 +1,4 @@
-﻿const conn = require("../config/db");
+const conn = require("../config/db");
 const { filterRowsByRegion, buildLocationWhere } = require("../utils/regionScope");
 
 function query(sql, params = []) {
@@ -26,9 +26,20 @@ async function getLogs(req) {
       a.is_received,
       a.received_at,
       b.bin_loc,
-      b.installed_at
+      b.installed_at,
+      s.temp AS temp_value,
+      s.gas AS smoke_value,
+      s.flame AS flame_value
     FROM t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
+    LEFT JOIN t_sensor s
+      ON s.sensor_id = (
+        SELECT s2.sensor_id
+        FROM t_sensor s2
+        WHERE s2.bin_id = a.bin_id
+        ORDER BY ABS(TIMESTAMPDIFF(SECOND, s2.created_at, a.alerted_at)) ASC, s2.sensor_id DESC
+        LIMIT 1
+      )
     WHERE (b.network_status IS NULL OR b.network_status <> 9)
       AND a.alert_type <> 'normal'
     ORDER BY
