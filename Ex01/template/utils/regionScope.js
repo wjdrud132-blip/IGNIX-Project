@@ -32,23 +32,12 @@ function getRegions(reqOrUser) {
 }
 
 function canViewLocation(reqOrUser, location) {
-  const regions = getRegions(reqOrUser);
-  if (regions === null) return true;
-  if (!regions.length) return false;
-
-  const text = String(location || "");
-  return regions.some((region) => text.includes(region));
+  return true;
 }
 
 function filterRowsByRegion(reqOrUser, rows, locationKey = "bin_loc") {
-  if (!Array.isArray(rows)) return [];
-  const regions = getRegions(reqOrUser);
-  if (regions === null) return rows;
-  if (!regions.length) return [];
-
-  return rows.filter((row) => canViewLocation(reqOrUser, row[locationKey]));
+  return Array.isArray(rows) ? rows : [];
 }
-
 
 function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
   if (!Array.isArray(rows)) return [];
@@ -65,15 +54,9 @@ function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
 
   return Array.from(byLocation.values());
 }
-function buildLocationWhere(reqOrUser, fieldName) {
-  const regions = getRegions(reqOrUser);
-  if (regions === null) return { clause: "", params: [] };
-  if (!regions.length) return { clause: " AND 1 = 0", params: [] };
 
-  return {
-    clause: " AND (" + regions.map(() => `${fieldName} LIKE ?`).join(" OR ") + ")",
-    params: regions.map((region) => `%${region}%`),
-  };
+function buildLocationWhere(reqOrUser, fieldName) {
+  return { clause: "", params: [] };
 }
 
 module.exports = {
@@ -85,7 +68,3 @@ module.exports = {
   dedupeRowsByLocation,
   buildLocationWhere,
 };
-
-
-
-

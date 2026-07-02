@@ -158,7 +158,7 @@
 <body>
   <% const pageUser = typeof currentUser !== "undefined" ? currentUser : {}; %>
   <script>
-const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
+const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadState(rows){return Array.isArray(rows)?rows:[];}function fidsMarkAlertsRead(){}function fidsAlertsAreRead(){return false;}
 window.__FIDS_USER__ = <%- JSON.stringify(pageUser) %>;</script>
 
   <%- include("partials/settings-main-sidebar", { settingsSidebarUser: pageUser }) %>
@@ -211,6 +211,8 @@ window.__FIDS_USER__ = <%- JSON.stringify(pageUser) %>;</script>
 </script>
 </body>
 </html>
+
+
 
 
 

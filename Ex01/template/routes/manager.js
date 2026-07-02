@@ -21,13 +21,25 @@ router.post("/email/send", (req, res) => {
   }
 
   const email = mgr_email.trim();
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  emailCodes[email] = code;
 
-  console.log("이메일:", email);
-  console.log("인증번호:", code);
+  conn.query("SELECT mgr_id FROM t_manager WHERE mgr_email = ?", [email], (err, rows) => {
+    if (err) {
+      console.error("이메일 중복 확인 실패:", err);
+      return res.status(500).send("이메일 중복 확인에 실패했습니다.");
+    }
 
-  res.send("인증번호가 발송되었습니다.");
+    if (rows.length > 0) {
+      return res.status(409).send("중복된 이메일입니다.");
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    emailCodes[email] = code;
+
+    console.log("이메일:", email);
+    console.log("인증번호:", code);
+
+    res.send("인증번호가 발송되었습니다.");
+  });
 });
 
 router.post("/email/check", (req, res) => {
@@ -151,18 +163,29 @@ router.post("/join", (req, res) => {
       return res.send("회원가입 신청 실패");
     }
 
-    conn.query(sql, [email, password, name, phone, org, 0, "manager"], (err) => {
-      if (err) {
-        console.error("회원가입 신청 실패:", err);
-
-        if (err.code === "ER_DUP_ENTRY") {
-          return res.send("이미 가입된 이메일입니다.");
-        }
-
-        return res.send("회원가입 신청 실패");
+    conn.query("SELECT mgr_id FROM t_manager WHERE mgr_email = ?", [email], (dupErr, rows) => {
+      if (dupErr) {
+        console.error("이메일 중복 확인 실패:", dupErr);
+        return res.status(500).send("이메일 중복 확인에 실패했습니다.");
       }
 
-      res.send("회원가입 신청 완료");
+      if (rows.length > 0) {
+        return res.status(409).send("중복된 이메일입니다.");
+      }
+
+      conn.query(sql, [email, password, name, phone, org, 0, "manager"], (err) => {
+        if (err) {
+          console.error("회원가입 신청 실패:", err);
+
+          if (err.code === "ER_DUP_ENTRY") {
+            return res.status(409).send("중복된 이메일입니다.");
+          }
+
+          return res.send("회원가입 신청 실패");
+        }
+
+        res.send("회원가입 신청 완료");
+      });
     });
   });
 });

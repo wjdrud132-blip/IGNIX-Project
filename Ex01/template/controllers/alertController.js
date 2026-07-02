@@ -58,3 +58,22 @@ exports.markAllRead = async (req, res) => {
     });
   }
 };
+
+exports.markSelectedRead = async (req, res) => {
+  try {
+    const result = await alertModel.markSelectedRead(req, req.body.alertIds);
+
+    res.json({
+      success: true,
+      message: "선택 읽음 처리 완료",
+      changedRows: result.changedRows
+    });
+  } catch (err) {
+    console.error("선택 읽음 처리 실패:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "선택 읽음 처리 실패"
+    });
+  }
+};

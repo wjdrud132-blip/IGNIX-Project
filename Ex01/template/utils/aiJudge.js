@@ -11,65 +11,197 @@ function originalStatus(row) {
   return "normal";
 }
 
-function fallbackSensorValues(row) {
-  const id = Number(row && row.bin_id);
-  const dangerMap = { 1: [68.7, 350, 1], 2: [68.7, 350, 1], 3: [66.4, 328, 1], 4: [64.9, 305, 1], 10: [67.5, 320, 1] };
-  const warningMap = { 5: [45.2, 120, 0], 6: [43.5, 110, 0], 7: [44.8, 108, 0], 8: [44.6, 115, 0] };
-  const normalMap = { 9: [29.1, 18, 0], 11: [30.2, 15, 0], 12: [26.9, 8, 0] };
-  const values = dangerMap[id] || warningMap[id] || normalMap[id] || [28.4, 12, 0];
-  return { temp: values[0], smoke: values[1], flame: values[2] };
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    const numberValue = toNumber(value);
+    if (numberValue !== null) return numberValue;
+  }
+  return null;
 }
 
 function parseSensorValues(row) {
   const msg = String((row && row.alert_msg) || "");
-  const fallback = fallbackSensorValues(row || {});
-  const tempMatch = msg.match(/\uC628\uB3C4\s*([0-9.]+)/);
-  const smokeMatch = msg.match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+)/);
-  const flameMatch = msg.match(/\uBD88\uAF43\s*\uAC10\uC9C0\s*(0|1)/);
+  const tempMatch = msg.match(/온도\s*([0-9.]+)/);
+  const smokeMatch = msg.match(/연기\s*감지값\s*(\d+(?:\.\d+)?)/);
+  const flameMatch = msg.match(/불꽃\s*감지\s*(0|1|O|X)/i);
+  const flameText = flameMatch && String(flameMatch[1]).toUpperCase();
+
   return {
-    temp: tempMatch ? Number(tempMatch[1]) : fallback.temp,
-    smoke: smokeMatch ? Number(smokeMatch[1]) : fallback.smoke,
-    flame: flameMatch ? Number(flameMatch[1]) : fallback.flame,
+    temp: firstNumber(row && row.temp_value, row && row.temp, row && row.temperature, tempMatch && tempMatch[1]),
+    smoke: firstNumber(row && row.smoke_value, row && row.gas, row && row.smoke, smokeMatch && smokeMatch[1]),
+    flame: firstNumber(row && row.flame_value, row && row.flame, flameText === "O" ? 1 : flameText === "X" ? 0 : flameText),
   };
 }
 
-function judgeDanger(row, thresholds = defaultThresholds, enabled = true) {
-  const sensor = parseSensorValues(row || {});
-  const baseStatus = originalStatus(row || {});
-  if (!enabled) {
+function isNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function percentile(values, p) {
+  const nums = values.map(toNumber).filter((value) => value !== null).sort((a, b) => a - b);
+  if (!nums.length) return null;
+  const index = Math.min(nums.length - 1, Math.max(0, Math.ceil((p / 100) * nums.length) - 1));
+  return nums[index];
+}
+
+function avg(values) {
+  const nums = values.map(toNumber).filter((value) => value !== null);
+  if (!nums.length) return null;
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+}
+
+function midpoint(a, b, fallback) {
+  return isNumber(a) && isNumber(b) ? (a + b) / 2 : fallback;
+}
+
+function normalizeRisk(value) {
+  const risk = Number(value);
+  if (risk === 2) return 2;
+  if (risk === 1) return 1;
+  return 0;
+}
+
+function stats(rows, field) {
+  const values = rows.map((row) => row[field]);
+  return {
+    avg: avg(values),
+    p75: percentile(values, 75),
+    p90: percentile(values, 90),
+    p95: percentile(values, 95),
+  };
+}
+
+function trainSensorModel(rows = [], thresholds = defaultThresholds) {
+  const samples = rows
+    .map((row) => ({
+      bin_id: row.bin_id,
+      temp: toNumber(row.temp),
+      smoke: toNumber(row.gas ?? row.smoke),
+      flame: toNumber(row.flame),
+      gas_change: toNumber(row.gas_change),
+      temp_change: toNumber(row.temp_change),
+      risk: normalizeRisk(row.fire_risk),
+    }))
+    .filter((row) => isNumber(row.temp) && isNumber(row.smoke));
+
+  const risk0 = samples.filter((row) => row.risk === 0);
+  const risk1 = samples.filter((row) => row.risk === 1);
+  const risk2 = samples.filter((row) => row.risk === 2);
+
+  if (samples.length < 20 || new Set(samples.map((row) => row.risk)).size < 2) {
     return {
-      status: baseStatus,
-      reason: ["\u0041\u0049 \uD310\uB2E8\uC774 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uAE30\uC874 \uC784\uACC4\uAC12 \uAE30\uC900\uC744 \uC0AC\uC6A9\uD569\uB2C8\uB2E4."],
-      sensor,
-      confidence: 0,
+      available: false,
+      sampleCount: samples.length,
+      reason: "t_sensor 학습 데이터의 정상/주의/위험 구분이 부족해 기존 임계값 기준을 사용합니다.",
     };
   }
 
+  const normalGas = stats(risk0, "smoke");
+  const warningGas = stats(risk1, "smoke");
+  const dangerGas = stats(risk2, "smoke");
+  const normalTempStats = stats(risk0, "temp");
+  const warningTempStats = stats(risk1, "temp");
+  const dangerTempStats = stats(risk2, "temp");
+
+  const warningSmoke = Math.max(0, midpoint(normalGas.p90, warningGas.p75, thresholds.warningSmoke));
+  const dangerSmoke = Math.max(warningSmoke + 1, midpoint(warningGas.p90, dangerGas.p75, thresholds.dangerSmoke));
+  const warningTemp = Math.max(0, midpoint(normalTempStats.p90, warningTempStats.p75, thresholds.warningTemp));
+  const dangerTemp = Math.max(warningTemp + 1, midpoint(warningTempStats.p90, dangerTempStats.p75, thresholds.dangerTemp));
+
+  const gasChangeP90 = percentile(samples.map((row) => row.gas_change), 90) ?? 0;
+  const tempChangeP90 = percentile(samples.map((row) => row.temp_change), 90) ?? 0;
+
+  const byBin = new Map();
+  for (const row of samples) {
+    if (!byBin.has(row.bin_id)) byBin.set(row.bin_id, []);
+    byBin.get(row.bin_id).push(row);
+  }
+
+  const binBaselines = {};
+  for (const [binId, list] of byBin.entries()) {
+    const normalList = list.filter((row) => row.risk === 0);
+    const base = normalList.length >= 10 ? normalList : list;
+    binBaselines[binId] = {
+      tempP95: percentile(base.map((row) => row.temp), 95),
+      smokeP95: percentile(base.map((row) => row.smoke), 95),
+    };
+  }
+
+  return {
+    available: true,
+    sampleCount: samples.length,
+    warningSmoke,
+    dangerSmoke,
+    warningTemp,
+    dangerTemp,
+    gasChangeP90,
+    tempChangeP90,
+    binBaselines,
+  };
+}
+
+function judgeWithModel(row, sensor, model) {
   const reasons = [];
   let dangerScore = 0;
   let warningScore = 0;
 
-  if (sensor.flame === 1) {
-    dangerScore += 4;
-    reasons.push("\uBD88\uAF43\uC774 \uAC10\uC9C0\uB418\uC5B4 \uC989\uC2DC \uC704\uD5D8\uC73C\uB85C \uD310\uB2E8\uD588\uC2B5\uB2C8\uB2E4.");
+  const binBase = model.binBaselines && model.binBaselines[row.bin_id];
+  const adaptiveWarningSmoke = Math.max(model.warningSmoke, binBase && isNumber(binBase.smokeP95) ? binBase.smokeP95 : 0);
+  const adaptiveWarningTemp = Math.max(model.warningTemp, binBase && isNumber(binBase.tempP95) ? binBase.tempP95 : 0);
+  const smoke = sensor.smoke;
+  const temp = sensor.temp;
+  const flame = sensor.flame;
+  const gasChange = firstNumber(row.gas_change, row.smoke_change, 0);
+  const tempChange = firstNumber(row.temp_change, 0);
+
+  const flameIsUseful = flame === 1 && (
+    (isNumber(smoke) && smoke >= adaptiveWarningSmoke) ||
+    (isNumber(temp) && temp >= adaptiveWarningTemp) ||
+    (isNumber(gasChange) && gasChange >= model.gasChangeP90 && gasChange > 0) ||
+    (isNumber(tempChange) && tempChange >= model.tempChangeP90 && tempChange > 0)
+  );
+
+  if (isNumber(smoke)) {
+    if (smoke >= model.dangerSmoke) {
+      dangerScore += 3;
+      reasons.push("t_sensor 학습 데이터 기준으로 연기값이 위험 구간에 있습니다.");
+    } else if (smoke >= adaptiveWarningSmoke) {
+      warningScore += 2;
+      reasons.push("t_sensor 학습 데이터 기준으로 연기값이 주의 구간에 있습니다.");
+    }
   }
-  if (sensor.smoke >= thresholds.dangerSmoke) {
-    dangerScore += 3;
-    reasons.push("\uC5F0\uAE30 \uAC10\uC9C0\uAC12\uC774 \uC704\uD5D8 \uAE30\uC900\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4.");
-  } else if (sensor.smoke >= thresholds.warningSmoke) {
-    warningScore += 2;
-    reasons.push("\uC5F0\uAE30 \uAC10\uC9C0\uAC12\uC774 \uC8FC\uC758 \uAE30\uC900\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4.");
+
+  if (isNumber(temp)) {
+    if (temp >= model.dangerTemp) {
+      dangerScore += 2;
+      reasons.push("t_sensor 학습 데이터 기준으로 온도가 위험 구간에 있습니다.");
+    } else if (temp >= adaptiveWarningTemp) {
+      warningScore += 1;
+      reasons.push("t_sensor 학습 데이터 기준으로 온도가 평소보다 높은 구간입니다.");
+    }
   }
-  if (sensor.temp >= thresholds.dangerTemp) {
-    dangerScore += 3;
-    reasons.push("\uC628\uB3C4\uAC00 \uC704\uD5D8 \uAE30\uC900\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4.");
-  } else if (sensor.temp >= thresholds.warningTemp) {
+
+  if (isNumber(gasChange) && gasChange >= model.gasChangeP90 && gasChange > 0) {
     warningScore += 1;
-    reasons.push("\uC628\uB3C4\uAC00 \uC8FC\uC758 \uAE30\uC900\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4.");
+    reasons.push("연기값 증가폭이 학습 데이터의 상위 구간에 있습니다.");
   }
-  if (sensor.temp >= thresholds.warningTemp && sensor.smoke >= thresholds.warningSmoke) {
+
+  if (isNumber(tempChange) && tempChange >= model.tempChangeP90 && tempChange > 0) {
     warningScore += 1;
-    reasons.push("\uC628\uB3C4\uC640 \uC5F0\uAE30\uAC12\uC774 \uB3D9\uC2DC\uC5D0 \uC0C1\uC2B9\uD574 \uC704\uD5D8 \uAC00\uB2A5\uC131\uC774 \uC788\uC2B5\uB2C8\uB2E4.");
+    reasons.push("온도 증가폭이 학습 데이터의 상위 구간에 있습니다.");
+  }
+
+  if (flameIsUseful) {
+    dangerScore += 2;
+    reasons.push("불꽃 감지는 연기값 또는 온도 상승이 동반되어 위험 판단에 반영했습니다.");
+  } else if (flame === 1) {
+    reasons.push("불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
   }
 
   let status = "normal";
@@ -77,7 +209,94 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true) {
   else if (warningScore >= 1) status = "warning";
 
   if (status === "normal") {
-    reasons.push("\uC628\uB3C4, \uC5F0\uAE30, \uBD88\uAF43 \uAC12\uC774 \uC815\uC0C1 \uBC94\uC704\uC785\uB2C8\uB2E4.");
+    reasons.push("t_sensor 학습 데이터 기준으로 정상 범위입니다.");
+  }
+
+  return {
+    status,
+    reason: reasons,
+    confidence: Math.min(99, 62 + dangerScore * 9 + warningScore * 5),
+  };
+}
+
+function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model = null) {
+  const sensor = parseSensorValues(row || {});
+  const baseStatus = originalStatus(row || {});
+
+  if (!enabled) {
+    return {
+      status: baseStatus,
+      reason: ["AI 판단이 비활성화되어 기존 임계값 기준을 사용합니다."],
+      sensor,
+      confidence: 0,
+    };
+  }
+
+  if (model && model.available) {
+    const judged = judgeWithModel(row || {}, sensor, model);
+    return {
+      ...judged,
+      sensor,
+      model_sample_count: model.sampleCount,
+    };
+  }
+
+  const reasons = [];
+  let dangerScore = 0;
+  let warningScore = 0;
+
+  const flameUsable = sensor.flame === 1 && (
+    (isNumber(sensor.smoke) && sensor.smoke >= thresholds.warningSmoke) ||
+    (isNumber(sensor.temp) && sensor.temp >= thresholds.warningTemp)
+  );
+
+  if (flameUsable) {
+    dangerScore += 4;
+    reasons.push("불꽃이 감지되고 연기값 또는 온도 상승이 동반되어 위험으로 판단했습니다.");
+  } else if (sensor.flame === 1) {
+    reasons.push("불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
+  }
+
+  if (isNumber(sensor.smoke)) {
+    if (sensor.smoke >= thresholds.dangerSmoke) {
+      dangerScore += 3;
+      reasons.push("연기 감지값이 위험 기준을 초과했습니다.");
+    } else if (sensor.smoke >= thresholds.warningSmoke) {
+      warningScore += 2;
+      reasons.push("연기 감지값이 주의 기준을 초과했습니다.");
+    }
+  }
+
+  if (isNumber(sensor.temp)) {
+    if (sensor.temp >= thresholds.dangerTemp) {
+      dangerScore += 3;
+      reasons.push("온도가 위험 기준을 초과했습니다.");
+    } else if (sensor.temp >= thresholds.warningTemp) {
+      warningScore += 1;
+      reasons.push("온도가 주의 기준을 초과했습니다.");
+    }
+  }
+
+  if (
+    isNumber(sensor.temp) &&
+    isNumber(sensor.smoke) &&
+    sensor.temp >= thresholds.warningTemp &&
+    sensor.smoke >= thresholds.warningSmoke
+  ) {
+    warningScore += 1;
+    reasons.push("온도와 연기값이 동시에 상승해 위험 가능성이 있습니다.");
+  }
+
+  let status = "normal";
+  if (dangerScore >= 3) status = "danger";
+  else if (warningScore >= 1) status = "warning";
+
+  if (status === "normal") {
+    if (!isNumber(sensor.temp) && !isNumber(sensor.smoke) && !isNumber(sensor.flame)) {
+      reasons.push("최근 센서 데이터가 아직 없습니다.");
+    } else {
+      reasons.push("온도, 연기, 불꽃 값이 정상 범위입니다.");
+    }
   }
 
   return {
@@ -92,5 +311,7 @@ module.exports = {
   defaultThresholds,
   judgeDanger,
   parseSensorValues,
+  trainSensorModel,
 };
+
 

@@ -35,6 +35,21 @@ async function checkDangerAlert() {
   }
 }
 
+function parseAlertValue(alert, key) {
+  if (key === "temp" && alert.temp_value !== undefined && alert.temp_value !== null && alert.temp_value !== "") return alert.temp_value + "\u00B0C";
+  if (key === "smoke" && alert.smoke_value !== undefined && alert.smoke_value !== null && alert.smoke_value !== "") return alert.smoke_value + " (\uC704\uD5D8)";
+  const msg = String(alert.alert_msg || "");
+  if (key === "temp") {
+    const match = msg.match(/\uC628\uB3C4\s*([0-9.]+)/);
+    return match ? match[1] + "\u00B0C" : "-";
+  }
+  if (key === "smoke") {
+    const match = msg.match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+(?:\.\d+)?)/);
+    return match ? match[1] + " (\uC704\uD5D8)" : "-";
+  }
+  return "-";
+}
+
 function showDangerModal(alert) {
   if (document.querySelector(".fire-alert-overlay")) {
     return;
@@ -57,7 +72,7 @@ function showDangerModal(alert) {
         <div class="fire-info-grid">
           <div class="fire-info-box">
             <span>위치</span>
-            <strong>${alert.location || "#04 주차장 입구"}</strong>
+            <strong>${alert.location || "-"}</strong>
           </div>
           <div class="fire-info-box">
             <span>감지 시각</span>
@@ -65,11 +80,11 @@ function showDangerModal(alert) {
           </div>
           <div class="fire-info-box">
             <span>내부 온도</span>
-            <strong class="danger-text">68.7°C</strong>
+            <strong class="danger-text">${parseAlertValue(alert, "temp")}</strong>
           </div>
           <div class="fire-info-box">
             <span>연기 감지값</span>
-            <strong class="danger-text">350 (위험)</strong>
+            <strong class="danger-text">${parseAlertValue(alert, "smoke")}</strong>
           </div>
         </div>
 
@@ -129,4 +144,6 @@ function formatDate(value) {
 
 checkDangerAlert();
 setInterval(checkDangerAlert, 10000);
+
+
 

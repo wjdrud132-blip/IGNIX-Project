@@ -531,6 +531,12 @@
       const result = await response.text();
       alert(result);
 
+      if (!response.ok) {
+        emailCodeSent = false;
+        sessionStorage.removeItem("email_code_sent");
+        return false;
+      }
+
       emailCodeSent = true;
       sessionStorage.setItem("email_code_sent", "Y");
 
@@ -556,4 +562,5 @@
   </script>
 </body>
 </html>
+
 

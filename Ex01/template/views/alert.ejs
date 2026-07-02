@@ -236,7 +236,7 @@
     </div>
   </div>
   <script>
-const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
+const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadState(rows){return Array.isArray(rows)?rows:[];}function fidsMarkAlertsRead(){}function fidsAlertsAreRead(){return false;}
 
     const $ = (id) => document.getElementById(id);
     let alertRows = [];
@@ -281,29 +281,23 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     function parseTemp(msg) { const match = String(msg || "").match(/온도\s*([0-9.]+)/); return match ? match[1] + "°C" : "-"; }
     function parseSmoke(msg) { const match = String(msg || "").match(/연기 감지값\s*(\d+)/); return match ? match[1] : "-"; }
     function parseFlame(msg) { const match = String(msg || "").match(/불꽃\s*감지\s*(0|1)/); return match ? match[1] : "0"; }
-    function fallbackSensorValues(row) {
-      const id = Number(row.bin_id);
-      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305] };
-      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108] };
-      const normalMap = { 8: [28.4, 12], 9: [29.1, 18], 10: [27.8, 9], 11: [30.2, 15], 12: [26.9, 8] };
-      const values = dangerMap[id] || warningMap[id] || normalMap[id] || (row.alert_type === "danger" ? [68.7, 350] : row.alert_type === "warning" ? [45.2, 120] : [28.4, 12]);
-      return { temp: values[0], smoke: values[1], flame: row.alert_type === "danger" ? 1 : 0 };
-    }
-
     function parseTemp(row) {
-      const match = String(row.alert_msg || "").match(/온도\s*([0-9.]+)/);
-      return (match ? match[1] : fallbackSensorValues(row).temp) + "°C";
+      if (row.temp_value !== undefined && row.temp_value !== null && row.temp_value !== "") return row.temp_value + "\u00B0C";
+      const match = String(row.alert_msg || "").match(/\uC628\uB3C4\s*([0-9.]+)/);
+      return match ? match[1] + "\u00B0C" : "-";
     }
 
     function parseSmoke(row) {
-      const match = String(row.alert_msg || "").match(/연기 감지값\s*(\d+)/);
-      return match ? match[1] : String(fallbackSensorValues(row).smoke);
+      if (row.smoke_value !== undefined && row.smoke_value !== null && row.smoke_value !== "") return String(row.smoke_value);
+      const match = String(row.alert_msg || "").match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+(?:\.\d+)?)/);
+      return match ? match[1] : "-";
     }
 
     function parseFlame(row) {
-      const match = String(row.alert_msg || "").match(/불꽃\s*감지\s*(0|1)/);
-      const value = row.alert_type === "danger" ? 1 : (match ? Number(match[1]) : Number(fallbackSensorValues(row).flame));
-      return value === 1 ? "O" : "X";
+      if (row.flame_value !== undefined && row.flame_value !== null && row.flame_value !== "") return String(row.flame_value) === "1" ? "O" : "X";
+      const match = String(row.alert_msg || "").match(/\uBD88\uAF43\s*\uAC10\uC9C0\s*(0|1|O|X)/i);
+      if (!match) return "-";
+      return String(match[1]).toUpperCase() === "1" || String(match[1]).toUpperCase() === "O" ? "O" : "X";
     }
 
     function timeOnly(value) { if (!value) return "-"; const date = new Date(value); return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") + ":" + String(date.getSeconds()).padStart(2, "0"); }
@@ -334,12 +328,11 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
     }
 
     function isRowRead(row) {
-      return testReadMode || selectedReadMap.has(rowKey(row));
+      return row.is_received === "Y";
     }
 
     function rowReadAt(row) {
-      const selectedReadAt = selectedReadMap.get(rowKey(row));
-      return selectedReadAt || (testReadMode ? testReadAt : null);
+      return row.received_at || null;
     }
 
     function renderTable() {
@@ -435,17 +428,30 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       renderTable();
     }
 
-    function markSelectedRead() {
+    async function markSelectedRead() {
       if (!selectedAlertIds.size) return alert("읽음 처리할 알림을 선택해주세요.");
-      const now = new Date();
-      selectedAlertIds.forEach((id) => { if (!selectedReadMap.has(id)) selectedReadMap.set(id, now); });
+      const ids = Array.from(selectedAlertIds);
+      const response = await fetch("/alert/api/read-selected", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertIds: ids })
+      });
+      const result = await response.json();
+      if (!result.success) return alert(result.message || "선택 읽음 처리 실패");
       selectedAlertIds.clear();
       const selectAll = $("selectAllAlerts");
       if (selectAll) selectAll.checked = false;
-      renderTable();
+      await loadLogs();
+      await loadTopbarAlerts();
     }
 
-    function markAllRead() { if (!testReadMode) { testReadMode = true; testReadAt = new Date(); } renderTable(); }
+    async function markAllRead() {
+      const response = await fetch("/alert/api/read-all", { method: "POST" });
+      const result = await response.json();
+      if (!result.success) return alert(result.message || "전체 읽음 처리 실패");
+      await loadLogs();
+      await loadTopbarAlerts();
+    }
     function openExportModal() { setDefaultAlertPeriod(); $("exportModal").classList.add("open"); }
     function closeExportModal() { $("exportModal").classList.remove("open"); }
     function selectExportFormat(format) { selectedFormat = format; document.querySelectorAll(".option-btn").forEach((button) => button.classList.toggle("active", button.dataset.format === format)); }
@@ -490,10 +496,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       const response = await fetch("/alert/api/logs");
       const result = await response.json();
       alertRows = (result.rows || []).filter((row) => row.alert_type !== "normal");
-      testReadMode = false;
-      testReadAt = null;
       selectedAlertIds = new Set();
-      selectedReadMap = new Map();
       renderStats();
       renderMonthChart();
       renderFrequency();
@@ -594,6 +597,10 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
   <script src="/js/topbar-alert.js"></script>
 </body>
 </html>
+
+
+
+
 
 
 

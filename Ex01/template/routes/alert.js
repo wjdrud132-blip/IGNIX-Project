@@ -2,7 +2,7 @@
 const router = express.Router();
 
 const conn = require("../config/db");
-const { filterRowsByRegion, dedupeRowsByLocation } = require("../utils/regionScope");
+const { filterRowsByRegion, dedupeRowsByLocation, buildLocationWhere } = require("../utils/regionScope");
 const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
 
 function displayBinId(binId) {
@@ -18,20 +18,6 @@ function query(sql, params = []) {
   });
 }
 
-function fallbackAlertMsg(binId) {
-  const id = Number(binId);
-  if (id === 1 || id === 2) return "온도 68.7 / 연기 감지값 350 / 불꽃 감지 1";
-  if (id === 3) return "온도 66.4 / 연기 감지값 328 / 불꽃 감지 1";
-  if (id === 4) return "온도 64.9 / 연기 감지값 305 / 불꽃 감지 1";
-  if (id === 5) return "온도 45.2 / 연기 감지값 120 / 불꽃 감지 0";
-  if (id === 6) return "온도 43.5 / 연기 감지값 110 / 불꽃 감지 0";
-  if (id === 7) return "온도 44.8 / 연기 감지값 108 / 불꽃 감지 0";
-  if (id === 8) return "온도 44.6 / 연기 감지값 115 / 불꽃 감지 0";
-  if (id === 9) return "온도 29.1 / 연기 감지값 18 / 불꽃 감지 0";
-  if (id === 10) return "온도 67.5 / 연기 감지값 320 / 불꽃 감지 1";
-  if (id === 11) return "온도 30.2 / 연기 감지값 15 / 불꽃 감지 0";
-  return "온도 26.9 / 연기 감지값 8 / 불꽃 감지 0";
-}
 
 async function getThresholds() {
   try {
@@ -61,34 +47,35 @@ async function getAiEnabled() {
 async function getScopedAlerts(req) {
   const sql = `
     SELECT
-      b.bin_id AS alert_id,
+      COALESCE(a.alert_id, b.bin_id) AS alert_id,
       b.bin_id,
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 'danger'
-        WHEN b.bin_id IN (5, 6, 7, 8) THEN 'warning'
+        WHEN s.fire_risk = 2 THEN 'danger'
+        WHEN s.fire_risk = 1 THEN 'warning'
+        WHEN a.alert_type IS NOT NULL THEN a.alert_type
         ELSE 'normal'
       END AS rule_status,
-      COALESCE(a.alert_msg,
-        CASE
-          WHEN b.bin_id = 1 THEN '온도 68.7 / 연기 감지값 350 / 불꽃 감지 1'
-          WHEN b.bin_id = 2 THEN '온도 68.7 / 연기 감지값 350 / 불꽃 감지 1'
-          WHEN b.bin_id = 3 THEN '온도 66.4 / 연기 감지값 328 / 불꽃 감지 1'
-          WHEN b.bin_id = 4 THEN '온도 64.9 / 연기 감지값 305 / 불꽃 감지 1'
-          WHEN b.bin_id = 5 THEN '온도 45.2 / 연기 감지값 120 / 불꽃 감지 0'
-          WHEN b.bin_id = 6 THEN '온도 43.5 / 연기 감지값 110 / 불꽃 감지 0'
-          WHEN b.bin_id = 7 THEN '온도 44.8 / 연기 감지값 108 / 불꽃 감지 0'
-          WHEN b.bin_id = 8 THEN '온도 44.6 / 연기 감지값 115 / 불꽃 감지 0'
-          WHEN b.bin_id = 9 THEN '온도 29.1 / 연기 감지값 18 / 불꽃 감지 0'
-          WHEN b.bin_id = 10 THEN '온도 67.5 / 연기 감지값 320 / 불꽃 감지 1'
-          WHEN b.bin_id = 11 THEN '온도 30.2 / 연기 감지값 15 / 불꽃 감지 0'
-          ELSE '온도 26.9 / 연기 감지값 8 / 불꽃 감지 0'
-        END
-      ) AS alert_msg,
-      COALESCE(a.alerted_at, DATE_ADD(COALESCE(DATE(b.installed_at), CURDATE()), INTERVAL (14 * 3600 + 30 * 60 + MOD(b.bin_id, 50)) SECOND)) AS alerted_at,
+      COALESCE(a.alert_msg, '') AS alert_msg,
+      COALESCE(a.alerted_at, s.created_at, b.created_at) AS alerted_at,
       COALESCE(a.is_received, 'N') AS is_received,
       b.bin_loc,
-      b.installed_at
+      b.installed_at,
+      s.temp AS temp_value,
+      s.gas AS smoke_value,
+      s.flame AS flame_value,
+      s.fire_risk
     FROM t_trashbin b
+    LEFT JOIN (
+      SELECT s1.*
+      FROM t_sensor s1
+      INNER JOIN (
+        SELECT bin_id, MAX(created_at) AS latest_created_at
+        FROM t_sensor
+        GROUP BY bin_id
+      ) latest_sensor
+        ON s1.bin_id = latest_sensor.bin_id
+       AND s1.created_at = latest_sensor.latest_created_at
+    ) s ON b.bin_id = s.bin_id
     LEFT JOIN (
       SELECT a1.*
       FROM t_alert a1
@@ -101,14 +88,14 @@ async function getScopedAlerts(req) {
        AND a1.alerted_at = latest.latest_alerted_at
     ) a ON b.bin_id = a.bin_id
     WHERE IFNULL(b.network_status, 1) <> 9
-  `;
+  `
 
   const thresholds = await getThresholds();
   const aiEnabled = await getAiEnabled();
   const rows = dedupeRowsByLocation(filterRowsByRegion(req, await query(sql), "bin_loc"), "bin_loc");
 
   return rows.map((row) => {
-    const ai = judgeDanger({ ...row, alert_type: row.rule_status, alert_msg: row.alert_msg || fallbackAlertMsg(row.bin_id) }, thresholds, aiEnabled);
+    const ai = judgeDanger({ ...row, alert_type: row.rule_status, alert_msg: row.alert_msg || "" }, thresholds, aiEnabled);
     return {
       ...row,
       display_bin_id: displayBinId(row.bin_id),
@@ -137,6 +124,9 @@ router.get("/danger/latest", async (req, res) => {
       location: danger.bin_loc,
       alert_msg: danger.alert_msg,
       alerted_at: danger.alerted_at,
+      temp_value: danger.temp_value,
+      smoke_value: danger.smoke_value,
+      flame_value: danger.flame_value,
     });
   } catch (err) {
     console.error("위험 알림 조회 실패:", err);
@@ -153,13 +143,37 @@ router.get("/list", async (req, res) => {
   }
 });
 
-router.post("/read-all", (req, res) => {
-  res.json({
-    message: "모든 알림을 읽음 처리했습니다.",
-    changedRows: 1,
-  });
+router.post("/read-all", async (req, res) => {
+  try {
+    const scope = buildLocationWhere(req, "b.bin_loc");
+    const result = await query(`
+      UPDATE t_alert a
+      LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
+      SET
+        a.is_received = 'Y',
+        a.received_at = CASE
+          WHEN a.is_received = 'Y' THEN a.received_at
+          ELSE NOW()
+        END
+      WHERE a.is_received <> 'Y'
+        AND a.alert_type <> 'normal'
+        AND (b.network_status IS NULL OR b.network_status <> 9)
+        ${scope.clause}
+    `, scope.params);
+
+    res.json({
+      message: "모든 알림을 읽음 처리했습니다.",
+      changedRows: result.changedRows || 0,
+    });
+  } catch (err) {
+    console.error("상단 알림 전체 읽음 처리 실패:", err);
+    res.status(500).json({ message: "모든 알림 읽음 처리 실패" });
+  }
 });
 
 module.exports = router;
+
+
+
 
 

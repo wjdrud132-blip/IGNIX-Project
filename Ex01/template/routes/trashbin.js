@@ -2,11 +2,77 @@
 const router = express.Router();
 
 const conn = require("../config/db");
-const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
+const { judgeDanger, defaultThresholds, trainSensorModel } = require("../utils/aiJudge");
 const { filterRowsByRegion, canViewLocation, dedupeRowsByLocation } = require("../utils/regionScope");
 
 function displayBinId(binId) {
   return binId;
+}
+
+const SENSOR_ONLINE_LIMIT_MS = 10000;
+
+function getSensorAgeMs(sensorCreatedAt) {
+  if (!sensorCreatedAt) return null;
+  const sensorTime = new Date(sensorCreatedAt).getTime();
+  if (!Number.isFinite(sensorTime)) return null;
+  return Date.now() - sensorTime;
+}
+
+function isSensorOnline(sensorCreatedAt) {
+  const ageMs = getSensorAgeMs(sensorCreatedAt);
+  return ageMs !== null && ageMs >= 0 && ageMs <= SENSOR_ONLINE_LIMIT_MS;
+}
+
+let cachedSensorModel = null;
+let cachedSensorModelAt = 0;
+const SENSOR_MODEL_CACHE_MS = 60000;
+
+function getSensorModel(thresholds, callback) {
+  const now = Date.now();
+  if (cachedSensorModel && now - cachedSensorModelAt < SENSOR_MODEL_CACHE_MS) {
+    return callback(null, cachedSensorModel);
+  }
+
+  const sql = `
+    SELECT bin_id, temp, gas, flame, fire_risk
+    FROM t_sensor
+    WHERE fire_risk IS NOT NULL
+  `;
+
+  conn.query(sql, (err, rows) => {
+    if (err) {
+      console.error("t_sensor AI 학습 데이터 조회 실패:", err);
+      return callback(null, { available: false, sampleCount: 0, reason: "t_sensor 학습 데이터를 불러오지 못해 기존 임계값 기준을 사용합니다." });
+    }
+
+    cachedSensorModel = trainSensorModel(rows, thresholds);
+    cachedSensorModelAt = now;
+    callback(null, cachedSensorModel);
+  });
+}
+
+function rowForCurrentSensor(row) {
+  const online = isSensorOnline(row.sensor_created_at);
+  if (online) {
+    return {
+      ...row,
+      sensor_online: "Y",
+      sensor_age_seconds: Math.floor(getSensorAgeMs(row.sensor_created_at) / 1000),
+    };
+  }
+
+  return {
+    ...row,
+    sensor_online: "N",
+    sensor_age_seconds: getSensorAgeMs(row.sensor_created_at) === null ? null : Math.floor(getSensorAgeMs(row.sensor_created_at) / 1000),
+    network_status: 0,
+    alert_type: "normal",
+    alert_msg: "",
+    temp_value: null,
+    smoke_value: null,
+    flame_value: null,
+    fire_risk: null,
+  };
 }
 
 router.get("/list", (req, res) => {
@@ -22,16 +88,33 @@ router.get("/list", (req, res) => {
       m.mgr_phone,
       a.alert_id,
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 'danger'
-        WHEN b.bin_id IN (5, 6, 7, 8) THEN 'warning'
+        WHEN s.fire_risk = 2 THEN 'danger'
+        WHEN s.fire_risk = 1 THEN 'warning'
+        WHEN a.alert_type IS NOT NULL THEN a.alert_type
         ELSE 'normal'
       END AS alert_type,
-      a.alert_msg,
-      a.alerted_at,
-      a.is_received
+      COALESCE(a.alert_msg, '') AS alert_msg,
+      COALESCE(a.alerted_at, s.created_at, b.created_at) AS alerted_at,
+      a.is_received,
+      s.temp AS temp_value,
+      s.gas AS smoke_value,
+      s.flame AS flame_value,
+      s.fire_risk,
+      s.created_at AS sensor_created_at
     FROM t_trashbin b
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
+    LEFT JOIN (
+      SELECT s1.*
+      FROM t_sensor s1
+      INNER JOIN (
+        SELECT bin_id, MAX(created_at) AS latest_created_at
+        FROM t_sensor
+        GROUP BY bin_id
+      ) latest_sensor
+        ON s1.bin_id = latest_sensor.bin_id
+       AND s1.created_at = latest_sensor.latest_created_at
+    ) s ON b.bin_id = s.bin_id
     LEFT JOIN (
       SELECT a1.*
       FROM t_alert a1
@@ -47,12 +130,12 @@ router.get("/list", (req, res) => {
     WHERE IFNULL(b.network_status, 1) <> 9
     ORDER BY
       CASE
-        WHEN b.bin_id IN (1, 2, 3, 4, 10) THEN 1
-        WHEN b.bin_id IN (5, 6, 7, 8) THEN 2
+        WHEN s.fire_risk = 2 OR a.alert_type = 'danger' THEN 1
+        WHEN s.fire_risk = 1 OR a.alert_type = 'warning' THEN 2
         ELSE 3
       END,
       b.bin_id ASC
-  `;
+  `
 
   conn.query(sql, (err, rows) => {
     if (err) {
@@ -76,27 +159,32 @@ router.get("/list", (req, res) => {
 
       conn.query(aiSql, (aiErr, aiRows) => {
         const aiEnabled = !aiErr && aiRows && aiRows[0] ? aiRows[0].setting_value !== "N" : true;
-        const judgedRows = rows.map((row) => {
-          const ruleStatus = row.alert_type;
-          const ai = judgeDanger(row, thresholds, aiEnabled);
-          return {
-            ...row,
-            display_bin_id: displayBinId(row.bin_id),
-            rule_status: ruleStatus,
-            alert_type: ai.status,
-            ai_enabled: aiEnabled ? "Y" : "N",
-            ai_status: ai.status,
-            ai_reason: ai.reason.join(" "),
-            ai_confidence: ai.confidence,
-            temp_value: ai.sensor.temp,
-            smoke_value: ai.sensor.smoke,
-            flame_value: ai.sensor.flame,
-          };
-        }).sort((a, b) => {
-          const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
-          return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
+
+        getSensorModel(thresholds, (modelErr, sensorModel) => {
+          const judgedRows = rows.map((row) => {
+            const currentRow = rowForCurrentSensor(row);
+            const ruleStatus = currentRow.alert_type;
+            const ai = judgeDanger(currentRow, thresholds, aiEnabled, sensorModel);
+            return {
+              ...currentRow,
+              display_bin_id: displayBinId(currentRow.bin_id),
+              rule_status: ruleStatus,
+              alert_type: ai.status,
+              ai_enabled: aiEnabled ? "Y" : "N",
+              ai_status: ai.status,
+              ai_reason: currentRow.sensor_online === "Y" ? ai.reason.join(" ") : "최근 센서 데이터 수신이 없어 오프라인으로 표시합니다.",
+              ai_confidence: currentRow.sensor_online === "Y" ? ai.confidence : 0,
+              ai_model_sample_count: sensorModel && sensorModel.sampleCount ? sensorModel.sampleCount : 0,
+              temp_value: currentRow.sensor_online === "Y" ? ai.sensor.temp : null,
+              smoke_value: currentRow.sensor_online === "Y" ? ai.sensor.smoke : null,
+              flame_value: currentRow.sensor_online === "Y" ? ai.sensor.flame : null,
+            };
+          }).sort((a, b) => {
+            const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
+            return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
+          });
+          res.json(judgedRows);
         });
-        res.json(judgedRows);
       });
     });
   });
@@ -226,6 +314,12 @@ router.delete("/:bin_id", (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+
+
 
 
 

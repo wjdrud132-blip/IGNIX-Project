@@ -76,11 +76,41 @@ async function markAllRead(req) {
   return await query(sql, scope.params);
 }
 
+
+async function markSelectedRead(req, alertIds) {
+  const ids = (Array.isArray(alertIds) ? alertIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  if (!ids.length) return { changedRows: 0 };
+
+  const scope = buildLocationWhere(req, "b.bin_loc");
+  const placeholders = ids.map(() => "?").join(",");
+  const sql = `
+    UPDATE t_alert a
+    LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
+    SET
+      a.is_received = 'Y',
+      a.received_at = CASE
+        WHEN a.is_received = 'Y' THEN a.received_at
+        ELSE NOW()
+      END
+    WHERE a.alert_id IN (${placeholders})
+      AND a.is_received <> 'Y'
+      AND (b.network_status IS NULL OR b.network_status <> 9)
+      ${scope.clause}
+  `;
+
+  return await query(sql, [...ids, ...scope.params]);
+}
 module.exports = {
   getLogs,
   getStats,
-  markAllRead
+  markAllRead,
+  markSelectedRead
 };
+
+
 
 
 

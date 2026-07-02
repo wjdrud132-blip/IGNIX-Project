@@ -228,37 +228,7 @@
               <button type="button" id="readAllBtn">모두 읽음</button>
             </div>
 
-            <div class="alert-list" id="alertList">
-              <div class="alert-item danger">
-                <div class="alert-icon"><i class="ti ti-flame"></i></div>
-                <div class="alert-text">
-                  <strong>위험 감지</strong>
-                  <span>#04 주차장 입구</span>
-                  <small>연기감지값 350 / 온도 68.7°C</small>
-                </div>
-                <span class="alert-time">14:30:10</span>
-              </div>
-
-              <div class="alert-item warning">
-                <div class="alert-icon"><i class="ti ti-alert-triangle"></i></div>
-                <div class="alert-text">
-                  <strong>주의 감지</strong>
-                  <span>#03 놀이터 옆</span>
-                  <small>연기감지값 120 / 온도 45.2°C</small>
-                </div>
-                <span class="alert-time">14:30:15</span>
-              </div>
-
-              <div class="alert-item success">
-                <div class="alert-icon"><i class="ti ti-check"></i></div>
-                <div class="alert-text">
-                  <strong>정상 복귀</strong>
-                  <span>#06 차고지 옆</span>
-                  <small>센서 상태 정상</small>
-                </div>
-                <span class="alert-time">14:29:58</span>
-              </div>
-            </div>
+            <div class="alert-list" id="alertList"></div>
 
             <button class="alert-more" type="button" id="openAllAlertsBtn">전체 알림 보기 →</button>
           </div>
@@ -269,19 +239,19 @@
     <div class="content" id="dashboardContent">
       <div class="stat-row">
         <div class="stat-card total" onclick="filterTable('all', document.querySelector('.ft-btn'))">
-          <div><div class="stat-label">전체 쓰레기통</div><div><span class="stat-num">8</span><span class="stat-unit">개</span></div><div class="stat-sub">등록된 전체 개수</div></div>
+          <div><div class="stat-label">전체 쓰레기통</div><div><span class="stat-num">0</span><span class="stat-unit">개</span></div><div class="stat-sub">등록된 전체 개수</div></div>
           <div class="stat-icon"><i class="ti ti-trash"></i></div>
         </div>
         <div class="stat-card danger" onclick="filterTable('danger', document.querySelector('.ft-btn:nth-child(2)'))">
-          <div><div class="stat-label">위험</div><div><span class="stat-num">1</span><span class="stat-unit">개</span></div><div class="stat-pct">12.5%</div></div>
+          <div><div class="stat-label">위험</div><div><span class="stat-num">0</span><span class="stat-unit">개</span></div><div class="stat-pct">0%</div></div>
           <div class="stat-icon"><i class="ti ti-flame"></i></div>
         </div>
         <div class="stat-card warn" onclick="filterTable('warn', document.querySelector('.ft-btn:nth-child(3)'))">
-          <div><div class="stat-label">주의</div><div><span class="stat-num">2</span><span class="stat-unit">개</span></div><div class="stat-pct">25.0%</div></div>
+          <div><div class="stat-label">주의</div><div><span class="stat-num">0</span><span class="stat-unit">개</span></div><div class="stat-pct">0%</div></div>
           <div class="stat-icon"><i class="ti ti-alert-triangle"></i></div>
         </div>
         <div class="stat-card good" onclick="filterTable('good', document.querySelector('.ft-btn:nth-child(4)'))">
-          <div><div class="stat-label">정상</div><div><span class="stat-num">5</span><span class="stat-unit">개</span></div><div class="stat-pct">62.5%</div></div>
+          <div><div class="stat-label">정상</div><div><span class="stat-num">0</span><span class="stat-unit">개</span></div><div class="stat-pct">0%</div></div>
           <div class="stat-icon"><i class="ti ti-check"></i></div>
         </div>
       </div>
@@ -339,17 +309,12 @@
         <div><h2>전체 알림</h2><p>최근 감지된 알림 내역입니다.</p></div>
         <button type="button" id="closeAllAlertsBtn">×</button>
       </div>
-      <div class="all-alert-list" id="allAlertList">
-        <div class="all-alert-row danger"><div><strong>위험 감지</strong><span>#04 주차장 입구</span></div><p>연기감지값 350 / 온도 68.7°C</p><time>14:30:10</time></div>
-        <div class="all-alert-row warning"><div><strong>주의 감지</strong><span>#03 놀이터 옆</span></div><p>연기감지값 120 / 온도 45.2°C</p><time>14:30:15</time></div>
-        <div class="all-alert-row warning"><div><strong>주의 감지</strong><span>#07 운동장 입구</span></div><p>연기감지값 110 / 온도 43.5°C</p><time>14:30:03</time></div>
-        <div class="all-alert-row success"><div><strong>정상 복귀</strong><span>#06 차고지 옆</span></div><p>센서 상태 정상</p><time>14:29:58</time></div>
-      </div>
+      <div class="all-alert-list" id="allAlertList"></div>
     </div>
   </div>
 
   <script>
-const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=performance.getEntriesByType("navigation")[0];if(n&&n.type==="reload"){sessionStorage.removeItem(FIDS_ALERT_READ_KEY);}}catch(e){}})();function fidsApplyAlertReadState(rows){const list=Array.isArray(rows)?rows:[];if(sessionStorage.getItem(FIDS_ALERT_READ_KEY)==="Y"){return list.map(row=>({...row,is_received:"Y"}));}return list;}function fidsMarkAlertsRead(){sessionStorage.setItem(FIDS_ALERT_READ_KEY,"Y");}
+const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadState(rows){return Array.isArray(rows)?rows:[];}function fidsMarkAlertsRead(){}function fidsAlertsAreRead(){return false;}
 
     const role = sessionStorage.getItem("role");
     const mgrName = sessionStorage.getItem("mgr_name");
@@ -456,30 +421,23 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
       return "good";
     }
 
-    function dashboardFallbackSensorValues(row) {
-      const id = Number(row.bin_id);
-      const dangerMap = { 1: [68.7, 350], 2: [68.7, 350], 3: [66.4, 328], 4: [64.9, 305], 10: [67.5, 320] };
-      const warningMap = { 5: [45.2, 120], 6: [43.5, 110], 7: [44.8, 108], 8: [44.6, 115] };
-      const normalMap = { 9: [29.1, 18], 11: [30.2, 15], 12: [26.9, 8] };
-      const values = dangerMap[id] || warningMap[id] || normalMap[id] || (row.alert_type === "danger" ? [68.7, 350] : row.alert_type === "warning" ? [45.2, 120] : [28.4, 12]);
-      return { temp: values[0], smoke: values[1], flame: row.alert_type === "danger" ? 1 : 0 };
-    }
-
     function dashboardParseSmoke(row) {
-      const match = String(row.alert_msg || "").match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+)/);
-      return row.smoke_value ?? (match ? Number(match[1]) : dashboardFallbackSensorValues(row).smoke);
+      if (row.smoke_value !== undefined && row.smoke_value !== null && row.smoke_value !== "") return row.smoke_value;
+      const match = String(row.alert_msg || "").match(/\uC5F0\uAE30\s*\uAC10\uC9C0\uAC12\s*(\d+(?:\.\d+)?)/);
+      return match ? Number(match[1]) : "-";
     }
 
     function dashboardParseTemp(row) {
+      if (row.temp_value !== undefined && row.temp_value !== null && row.temp_value !== "") return row.temp_value;
       const match = String(row.alert_msg || "").match(/\uC628\uB3C4\s*([0-9.]+)/);
-      return row.temp_value ?? (match ? Number(match[1]) : dashboardFallbackSensorValues(row).temp);
+      return match ? Number(match[1]) : "-";
     }
 
     function dashboardParseFlame(row) {
-      if (row.alert_type === "danger") return "O";
-      const match = String(row.alert_msg || "").match(/\uBD88\uAF43\s*\uAC10\uC9C0\s*(0|1)/);
-      const value = row.flame_value ?? (match ? Number(match[1]) : dashboardFallbackSensorValues(row).flame);
-      return value === 1 ? "O" : "X";
+      if (row.flame_value !== undefined && row.flame_value !== null && row.flame_value !== "") return String(row.flame_value) === "1" ? "O" : "X";
+      const match = String(row.alert_msg || "").match(/\uBD88\uAF43\s*\uAC10\uC9C0\s*(0|1|O|X)/i);
+      if (!match) return "-";
+      return String(match[1]).toUpperCase() === "1" || String(match[1]).toUpperCase() === "O" ? "O" : "X";
     }
 
     function dashboardAlertTimestamp(value) {
@@ -643,7 +601,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
         .slice(0, 5);
 
       if (!rows.length) {
-        list.innerHTML = '<div class="empty" style="padding:24px 0">??? ??/?? ??? ????.</div>';
+        list.innerHTML = '<div class="empty" style="padding:24px 0">표시할 위험/주의 알림이 없습니다.</div>';
         return;
       }
 
@@ -652,7 +610,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
         const kind = isDanger ? "d" : "w";
         const icon = isDanger ? "ti-flame" : "ti-alert-triangle";
         const title = isDanger ? "\uC704\uD5D8 \uAC10\uC9C0" : "\uC8FC\uC758 \uAC10\uC9C0";
-        let message = row.alert_msg || (isDanger ? "\uD654\uC7AC \uC704\uD5D8 \uAC10\uC9C0 - \uC989\uAC01 \uB300\uC751 \uD544\uC694" : "\uC628\uB3C4 \uBC0F \uC5F0\uAE30 \uC784\uACC4\uAC12 \uCD08\uACFC");
+        let message = row.alert_msg || ((row.temp_value != null || row.smoke_value != null || row.flame_value != null) ? ("온도 " + (row.temp_value ?? "-") + " / 연기 감지값 " + (row.smoke_value ?? "-") + " / 불꽃 감지 " + ((String(row.flame_value) === "1" || String(row.flame_value).toUpperCase() === "O") ? "O" : "X")) : (isDanger ? "\uD654\uC7AC \uC704\uD5D8 \uAC10\uC9C0 - \uC989\uAC01 \uB300\uC751 \uD544\uC694" : "\uC628\uB3C4 \uBC0F \uC5F0\uAE30 \uC784\uACC4\uAC12 \uCD08\uACFC"));
         message = String(message)
           .replace(/\uBD88\uAF43\s*\uAC10\uC9C0\s*1/g, "\uBD88\uAF43 \uAC10\uC9C0 O")
           .replace(/\uBD88\uAF43\s*\uAC10\uC9C0\s*0/g, "\uBD88\uAF43 \uAC10\uC9C0 X");
@@ -733,6 +691,9 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";(function(){try{const n=perform
 </script>
 </body>
 </html>
+
+
+
 
 
 
