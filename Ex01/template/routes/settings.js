@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const conn = require("../config/db");
 const requireOperator = require("../middlewares/requireOperator");
 
@@ -129,44 +129,64 @@ async function saveSystemSettings(next, userId) {
   }
   return getSystemSettings();
 }
+function getManagerProfileSelectSql(whereClause) {
+  return `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
+          FROM t_manager
+          WHERE ${whereClause}`;
+}
+
+async function getCurrentManagerProfile(sessionUser = {}) {
+  await ensureManagerColumns();
+
+  const managerId = sessionUser.user_id || sessionUser.mgr_id || null;
+  const managerEmail = sessionUser.mgr_email || sessionUser.email || null;
+  let rows = [];
+
+  if (managerId && managerEmail) {
+    rows = await query(
+      `${getManagerProfileSelectSql("mgr_id = ? OR mgr_email = ?")}
+       ORDER BY CASE WHEN mgr_email = ? THEN 0 WHEN mgr_id = ? THEN 1 ELSE 2 END
+       LIMIT 1`,
+      [managerId, managerEmail, managerEmail, managerId]
+    );
+  } else if (managerId) {
+    rows = await query(getManagerProfileSelectSql("mgr_id = ?"), [managerId]);
+  } else if (managerEmail) {
+    rows = await query(getManagerProfileSelectSql("mgr_email = ?"), [managerEmail]);
+  }
+
+  if (!rows.length) return null;
+
+  const profile = rows[0];
+  if (profile.role === "operator") {
+    profile.mgr_org = "광주광역시 동구청";
+    profile.assigned_regions = "전체 구역";
+  }
+
+  return profile;
+}
+
+function syncSessionUser(req, profile) {
+  const currentUser = {
+    ...(req.session.user || {}),
+    ...profile,
+    user_id: profile.mgr_id,
+    mgr_id: profile.mgr_id,
+    name: profile.mgr_name,
+    email: profile.mgr_email,
+    approval_status: profile.is_approved,
+  };
+  req.session.user = currentUser;
+  return currentUser;
+}
 
 router.get("/", requireLogin, async (req, res) => {
   let currentUser = req.session.user || {};
 
   try {
-    const managerId = currentUser.user_id || currentUser.mgr_id;
-    const managerEmail = currentUser.mgr_email || currentUser.email;
-
-    if (managerId || managerEmail) {
-      await ensureManagerColumns();
-
-      const rows = managerId
-        ? await query(
-            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
-             FROM t_manager
-             WHERE mgr_id = ?`,
-            [managerId]
-          )
-        : await query(
-            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
-             FROM t_manager
-             WHERE mgr_email = ?`,
-            [managerEmail]
-          );
-
-      if (rows.length) {
-        const profile = rows[0];
-        currentUser = {
-          ...currentUser,
-          ...profile,
-          user_id: profile.mgr_id,
-          mgr_id: profile.mgr_id,
-          name: profile.mgr_name,
-          email: profile.mgr_email,
-          approval_status: profile.is_approved,
-        };
-        req.session.user = currentUser;
-      }
+    const profile = await getCurrentManagerProfile(currentUser);
+    if (profile) {
+      currentUser = syncSessionUser(req, profile);
     }
   } catch (err) {
     console.error("설정 페이지 계정 정보 조회 실패:", err);
@@ -286,23 +306,13 @@ router.post("/api/system/data", requireLogin, async (req, res) => {
 
 router.get("/api/profile", requireLogin, async (req, res) => {
   try {
-    await ensureManagerColumns();
-    const rows = await query(
-      `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
-       FROM t_manager
-       WHERE mgr_id = ?`,
-      [req.session.user.user_id || req.session.user.mgr_id]
-    );
+    const profile = await getCurrentManagerProfile(req.session.user || {});
 
-    if (!rows.length) {
+    if (!profile) {
       return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
     }
 
-    const profile = rows[0];
-    if (profile.role === "operator") {
-      profile.mgr_org = "광주광역시 동구청";
-    }
-
+    syncSessionUser(req, profile);
     res.json({ success: true, profile });
   } catch (err) {
     console.error("계정 정보 조회 실패:", err);
@@ -325,9 +335,8 @@ router.post("/api/profile", requireLogin, async (req, res) => {
   }
 
   try {
-    await ensureManagerColumns();
-    const rows = await query("SELECT mgr_email, mgr_org, assigned_regions, role FROM t_manager WHERE mgr_id = ?", [userId]);
-    if (!rows.length) {
+    const currentProfile = await getCurrentManagerProfile(user);
+    if (!currentProfile) {
       return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
     }
 
@@ -335,23 +344,21 @@ router.post("/api/profile", requireLogin, async (req, res) => {
       `UPDATE t_manager
        SET mgr_name = ?, mgr_phone = ?
        WHERE mgr_id = ?`,
-      [name, phone, userId]
+      [name, phone, currentProfile.mgr_id]
     );
 
-    req.session.user.name = name;
-    req.session.user.mgr_name = name;
+    const nextProfile = {
+      ...currentProfile,
+      mgr_name: name,
+      mgr_phone: phone,
+    };
+    syncSessionUser(req, nextProfile);
 
     res.json({
       success: true,
       requiresApproval: false,
       message: "계정 정보가 저장되었습니다.",
-      profile: {
-        mgr_name: name,
-        mgr_org: rows[0].role === "operator" ? "광주광역시 동구청" : rows[0].mgr_org,
-        mgr_email: rows[0].mgr_email,
-        mgr_phone: phone,
-        assigned_regions: rows[0].assigned_regions || "",
-      },
+      profile: nextProfile,
     });
   } catch (err) {
     console.error("계정 정보 저장 실패:", err);
@@ -513,5 +520,7 @@ router.get("/api/export/trashbins", (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
