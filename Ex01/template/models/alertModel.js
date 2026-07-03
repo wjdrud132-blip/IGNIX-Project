@@ -42,6 +42,13 @@ async function getLogs(req) {
       )
     WHERE (b.network_status IS NULL OR b.network_status <> 9)
       AND a.alert_type <> 'normal'
+      AND a.alert_id = (
+        SELECT MIN(a2.alert_id)
+        FROM t_alert a2
+        WHERE a2.bin_id = a.bin_id
+          AND a2.alert_type = a.alert_type
+          AND a2.alerted_at = a.alerted_at
+      )
     ORDER BY
       CASE a.alert_type
         WHEN 'danger' THEN 1
@@ -114,11 +121,32 @@ async function markSelectedRead(req, alertIds) {
 
   return await query(sql, [...ids, ...scope.params]);
 }
+
+async function deleteSelected(req, alertIds) {
+  const ids = (Array.isArray(alertIds) ? alertIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  if (!ids.length) return { affectedRows: 0 };
+
+  const scope = buildLocationWhere(req, "b.bin_loc");
+  const placeholders = ids.map(() => "?").join(",");
+  const sql = `
+    DELETE a
+    FROM t_alert a
+    LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
+    WHERE a.alert_id IN (${placeholders})
+      ${scope.clause}
+  `;
+
+  return await query(sql, [...ids, ...scope.params]);
+}
 module.exports = {
   getLogs,
   getStats,
   markAllRead,
-  markSelectedRead
+  markSelectedRead,
+  deleteSelected
 };
 
 

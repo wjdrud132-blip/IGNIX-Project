@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const conn = require("../config/db");
 const requireOperator = require("../middlewares/requireOperator");
 
@@ -313,6 +313,10 @@ router.post("/api/profile", requireLogin, async (req, res) => {
 
   if (!name) {
     return res.status(400).json({ success: false, message: "이름은 필수입니다." });
+  }
+
+  if (!phone) {
+    return res.status(400).json({ success: false, message: "휴대전화 번호는 필수입니다." });
   }
 
   try {

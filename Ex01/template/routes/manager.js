@@ -1,16 +1,30 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const conn = require("../config/db");
 
 const emailCodes = {};
+const EMAIL_CODE_TTL_MS = 5 * 60 * 1000;
 const passwordResetCodes = {};
 const passwordResetVerified = {};
 
 function ensureManagerOrgColumn(callback) {
-  conn.query("ALTER TABLE t_manager ADD COLUMN mgr_org VARCHAR(100) NULL", (err) => {
-    if (err && err.code !== "ER_DUP_FIELDNAME") return callback(err);
-    callback(null);
-  });
+  const alters = [
+    "ALTER TABLE t_manager ADD COLUMN mgr_org VARCHAR(100) NULL",
+    "ALTER TABLE t_manager ADD COLUMN assigned_regions VARCHAR(255) NULL",
+    "ALTER TABLE t_manager ADD COLUMN approval_status VARCHAR(20) NULL",
+  ];
+
+  let index = 0;
+  function next() {
+    if (index >= alters.length) return callback(null);
+    conn.query(alters[index], (err) => {
+      index += 1;
+      if (err && err.code !== "ER_DUP_FIELDNAME") return callback(err);
+      next();
+    });
+  }
+
+  next();
 }
 
 router.post("/email/send", (req, res) => {
@@ -33,7 +47,10 @@ router.post("/email/send", (req, res) => {
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    emailCodes[email] = code;
+    emailCodes[email] = {
+      code,
+      expiresAt: Date.now() + EMAIL_CODE_TTL_MS
+    };
 
     console.log("이메일:", email);
     console.log("인증번호:", code);
@@ -51,8 +68,22 @@ router.post("/email/check", (req, res) => {
 
   const email = mgr_email.trim();
   const inputCode = String(code).trim();
+  const saved = emailCodes[email];
 
-  if (emailCodes[email] === inputCode) {
+  if (!saved) {
+    return res.status(400).send("인증번호를 먼저 발송해주세요.");
+  }
+
+  const savedCode = typeof saved === "string" ? saved : saved.code;
+  const expiresAt = typeof saved === "string" ? 0 : saved.expiresAt;
+
+  if (expiresAt && Date.now() > expiresAt) {
+    delete emailCodes[email];
+    return res.status(410).send("인증 시간이 만료되었습니다. 인증번호를 다시 발송해주세요.");
+  }
+
+  if (savedCode === inputCode) {
+    delete emailCodes[email];
     return res.send("이메일 인증 성공");
   }
 
@@ -210,7 +241,7 @@ router.post("/login", (req, res) => {
     }
 
     const sql = `
-      SELECT mgr_id, mgr_email, mgr_pw, mgr_name, mgr_org, is_approved, role
+      SELECT mgr_id, mgr_email, mgr_pw, mgr_name, mgr_org, assigned_regions, approval_status, is_approved, role
       FROM t_manager
       WHERE mgr_email = ?
     `;
@@ -231,7 +262,11 @@ router.post("/login", (req, res) => {
         return res.json({ success: false, message: "비밀번호가 일치하지 않습니다." });
       }
 
-      if (user.role !== "operator" && user.is_approved === 0) {
+      if (user.role !== "operator" && (user.approval_status === "rejected" || Number(user.is_approved) === -1)) {
+        return res.json({ success: false, message: "관리자 가입 요청이 거절된 계정입니다." });
+      }
+
+      if (user.role !== "operator" && Number(user.is_approved) !== 1) {
         return res.json({ success: false, message: "관리자 승인 대기 중입니다." });
       }
 
@@ -243,8 +278,9 @@ router.post("/login", (req, res) => {
         name: user.mgr_name,
         mgr_name: user.mgr_name,
         mgr_org: user.mgr_org,
+        assigned_regions: user.assigned_regions,
         role: user.role,
-        approval_status: user.is_approved,
+        approval_status: user.approval_status || user.is_approved,
       };
 
       return res.json({
@@ -257,6 +293,7 @@ router.post("/login", (req, res) => {
           mgr_email: user.mgr_email,
           mgr_name: user.mgr_name,
           mgr_org: user.mgr_org,
+          assigned_regions: user.assigned_regions,
         },
       });
     });

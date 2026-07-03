@@ -1,4 +1,4 @@
-﻿const alertModel = require("../models/alertModel");
+const alertModel = require("../models/alertModel");
 
 exports.renderAlertPage = (req, res) => {
   res.render("alert");
@@ -74,6 +74,25 @@ exports.markSelectedRead = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "선택 읽음 처리 실패"
+    });
+  }
+};
+
+exports.deleteSelected = async (req, res) => {
+  try {
+    const result = await alertModel.deleteSelected(req, req.body.alertIds);
+
+    res.json({
+      success: true,
+      message: "알림 기록 삭제 완료",
+      deletedRows: result.affectedRows || 0
+    });
+  } catch (err) {
+    console.error("알림 기록 삭제 실패:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "알림 기록 삭제 실패"
     });
   }
 };

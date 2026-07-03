@@ -277,13 +277,35 @@
 
     let sec = 299;
     const cd = document.getElementById("countdown");
+    const checkBtn = document.getElementById("checkBtn");
+    let timerExpired = false;
+
+    function resetTimer() {
+      sec = 299;
+      timerExpired = false;
+      cd.textContent = "04:59";
+      cd.style.color = "#dc2626";
+      checkBtn.disabled = false;
+      checkBtn.style.opacity = "1";
+      checkBtn.style.cursor = "pointer";
+    }
+
+    function expireTimer() {
+      timerExpired = true;
+      cd.textContent = "00:00";
+      cd.style.color = "#aaa";
+      checkBtn.disabled = true;
+      checkBtn.style.opacity = "0.55";
+      checkBtn.style.cursor = "not-allowed";
+    }
 
     setInterval(() => {
+      if (timerExpired) return;
+
       sec--;
 
       if (sec <= 0) {
-        cd.textContent = "00:00";
-        cd.style.color = "#aaa";
+        expireTimer();
         return;
       }
 
@@ -293,7 +315,12 @@
       cd.textContent = `${m}:${s}`;
     }, 1000);
 
-    document.getElementById("checkBtn").addEventListener("click", async () => {
+    checkBtn.addEventListener("click", async () => {
+      if (timerExpired) {
+        alert("인증 시간이 만료되었습니다. 인증 코드 재발송을 눌러 다시 인증해주세요.");
+        return;
+      }
+
       const code = Array.from(document.querySelectorAll(".code-input"))
         .map((input) => input.value)
         .join("");
@@ -337,6 +364,16 @@
 
       const result = await response.text();
       alert(result);
+
+      if (response.ok) {
+        resetTimer();
+        const inputs = document.querySelectorAll(".code-input");
+        inputs.forEach((input) => {
+          input.value = "";
+          input.classList.remove("filled");
+        });
+        inputs[0].focus();
+      }
     });
   </script>
 </body>

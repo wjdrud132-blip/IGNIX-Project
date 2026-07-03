@@ -10,6 +10,7 @@ function displayBinId(binId) {
 }
 
 const SENSOR_ONLINE_LIMIT_MS = 10000;
+const pendingAlertKeys = new Set();
 
 function getSensorAgeMs(sensorCreatedAt) {
   if (!sensorCreatedAt) return null;
@@ -112,10 +113,13 @@ async function getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel) 
        created_at AS sensor_created_at
      FROM t_sensor
      WHERE bin_id = ?
-       AND created_at < ?
+       AND (
+         created_at < ?
+         OR (created_at = ? AND sensor_id < ?)
+       )
      ORDER BY created_at DESC, sensor_id DESC
      LIMIT 1`,
-    [row.bin_id, row.sensor_created_at]
+    [row.bin_id, row.sensor_created_at, row.sensor_created_at, row.sensor_id || 0]
   );
 
   if (!previousRows.length) return "normal";
@@ -132,42 +136,79 @@ async function getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel) 
   return alertStatusOf(ai.status);
 }
 
+
+async function getLatestSavedAlertStatus(row) {
+  const rows = await queryAsync(
+    `SELECT alert_type
+     FROM t_alert
+     WHERE bin_id = ?
+       AND alert_type IN ('danger', 'warning')
+     ORDER BY alerted_at DESC, alert_id DESC
+     LIMIT 1`,
+    [row.bin_id]
+  );
+
+  return rows.length ? rows[0].alert_type : null;
+}
 async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) {
   if (!row || row.sensor_online !== "Y") return;
   if (row.alert_type !== "danger" && row.alert_type !== "warning") return;
   if (!row.bin_id || !row.sensor_created_at || !row.mgr_id) return;
 
-  const exists = await queryAsync(
-    `SELECT alert_id
-     FROM t_alert
-     WHERE bin_id = ?
-       AND alert_type = ?
-       AND alerted_at = ?
-     LIMIT 1`,
-    [row.bin_id, row.alert_type, row.sensor_created_at]
-  );
+  const alertTime = new Date(row.sensor_created_at).getTime();
+  const alertKey = `${row.bin_id}|${row.alert_type}|${Number.isFinite(alertTime) ? alertTime : row.sensor_created_at}`;
+  if (pendingAlertKeys.has(alertKey)) return;
 
-  if (exists.length) return;
+  pendingAlertKeys.add(alertKey);
+  try {
+    const exists = await queryAsync(
+      `SELECT alert_id
+       FROM t_alert
+       WHERE bin_id = ?
+         AND alert_type = ?
+         AND alerted_at = ?
+       LIMIT 1`,
+      [row.bin_id, row.alert_type, row.sensor_created_at]
+    );
 
-  const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
-  if (previousStatus === row.alert_type) return;
+    if (exists.length) return;
 
-  await queryAsync(
-    `INSERT INTO t_alert
-      (bin_id, alert_type, alert_msg, alerted_at, is_received, received_at, mgr_id)
-     VALUES
-      (?, ?, ?, ?, 'N', ?, ?)`,
-    [
-      row.bin_id,
-      row.alert_type,
-      alertMessageFor(row),
-      row.sensor_created_at,
-      row.sensor_created_at,
-      row.mgr_id,
-    ]
-  );
+    const latestSavedStatus = await getLatestSavedAlertStatus(row);
+    if (latestSavedStatus) {
+      if (latestSavedStatus === row.alert_type) return;
+    } else {
+      const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
+      if (previousStatus === row.alert_type) return;
+    }
+
+    await queryAsync(
+      `INSERT INTO t_alert
+        (bin_id, alert_type, alert_msg, alerted_at, is_received, received_at, mgr_id)
+       SELECT ?, ?, ?, ?, 'N', ?, ?
+       FROM DUAL
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM t_alert
+         WHERE bin_id = ?
+           AND alert_type = ?
+           AND alerted_at = ?
+       )`,
+      [
+        row.bin_id,
+        row.alert_type,
+        alertMessageFor(row),
+        row.sensor_created_at,
+        row.sensor_created_at,
+        row.mgr_id,
+        row.bin_id,
+        row.alert_type,
+        row.sensor_created_at,
+      ]
+    );
+  } finally {
+    pendingAlertKeys.delete(alertKey);
+  }
 }
-
 async function saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel) {
   const targets = judgedRows
     .filter((row) => row.alert_type === "danger" || row.alert_type === "warning")
@@ -191,8 +232,8 @@ router.get("/list", (req, res) => {
       b.mgr_id,
       b.network_status,
       b.created_at,
-      m.mgr_name,
-      m.mgr_phone,
+      COALESCE(NULLIF(b.installer_name, ''), m.mgr_name) AS mgr_name,
+      COALESCE(NULLIF(b.installer_phone, ''), m.mgr_phone) AS mgr_phone,
       a.alert_id,
       CASE
         WHEN s.fire_risk = 2 THEN 'danger'
@@ -203,6 +244,7 @@ router.get("/list", (req, res) => {
       COALESCE(a.alert_msg, '') AS alert_msg,
       COALESCE(a.alerted_at, s.created_at, b.created_at) AS alerted_at,
       a.is_received,
+      s.sensor_id,
       s.temp AS temp_value,
       s.gas AS smoke_value,
       s.flame AS flame_value,
@@ -211,29 +253,22 @@ router.get("/list", (req, res) => {
     FROM t_trashbin b
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
-    LEFT JOIN (
-      SELECT s1.*
-      FROM t_sensor s1
-      INNER JOIN (
-        SELECT bin_id, MAX(created_at) AS latest_created_at
-        FROM t_sensor
-        GROUP BY bin_id
-      ) latest_sensor
-        ON s1.bin_id = latest_sensor.bin_id
-       AND s1.created_at = latest_sensor.latest_created_at
-    ) s ON b.bin_id = s.bin_id
-    LEFT JOIN (
-      SELECT a1.*
-      FROM t_alert a1
-      INNER JOIN (
-        SELECT bin_id, MAX(alerted_at) AS latest_alerted_at
-        FROM t_alert
-        GROUP BY bin_id
-      ) latest
-        ON a1.bin_id = latest.bin_id
-       AND a1.alerted_at = latest.latest_alerted_at
-    ) a
-      ON b.bin_id = a.bin_id
+    LEFT JOIN t_sensor s
+      ON s.sensor_id = (
+        SELECT s2.sensor_id
+        FROM t_sensor s2
+        WHERE s2.bin_id = b.bin_id
+        ORDER BY s2.created_at DESC, s2.sensor_id DESC
+        LIMIT 1
+      )
+    LEFT JOIN t_alert a
+      ON a.alert_id = (
+        SELECT a2.alert_id
+        FROM t_alert a2
+        WHERE a2.bin_id = b.bin_id
+        ORDER BY a2.alerted_at DESC, a2.alert_id DESC
+        LIMIT 1
+      )
     WHERE IFNULL(b.network_status, 1) <> 9
     ORDER BY
       CASE
@@ -306,7 +341,7 @@ router.get("/trash/list", (req, res) => {
       b.mgr_id,
       b.network_status,
       b.created_at,
-      m.mgr_name
+      COALESCE(NULLIF(b.installer_name, ''), m.mgr_name) AS mgr_name
     FROM t_trashbin b
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
@@ -372,6 +407,15 @@ router.delete("/trash/:bin_id", (req, res) => {
 router.post("/", (req, res) => {
   const { bin_loc, installed_at, network_status } = req.body;
   const mgr_id = req.body.mgr_id || req.session?.user?.user_id || req.session?.user?.mgr_id;
+  const rawBinId = String(req.body.bin_id || req.body.display_bin_id || "").trim();
+  const numericBinId = rawBinId.replace(/[^0-9]/g, "");
+  const bin_id = numericBinId ? Number(numericBinId) : null;
+  const installer_name = String(req.body.manager_name || req.body.installer_name || "").trim();
+  const installer_phone = String(req.body.manager_phone || req.body.installer_phone || "").trim();
+
+  if (!bin_id || !Number.isInteger(bin_id) || bin_id < 1) {
+    return res.status(400).json({ message: "쓰레기통 ID를 입력해주세요." });
+  }
 
   if (!bin_loc || !installed_at || !mgr_id) {
     return res.status(400).json({ message: "위치와 설치일을 입력하고 로그인 상태를 확인해주세요." });
@@ -379,24 +423,27 @@ router.post("/", (req, res) => {
 
   const sql = `
     INSERT INTO t_trashbin
-      (bin_loc, installed_at, mgr_id, network_status)
+      (bin_id, bin_loc, installed_at, mgr_id, network_status, installer_name, installer_phone)
     VALUES
-      (?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?)
   `;
 
-  conn.query(sql, [bin_loc, installed_at, mgr_id, network_status || 1], (err, result) => {
+  conn.query(sql, [bin_id, bin_loc, installed_at, mgr_id, network_status || 1, installer_name || null, installer_phone || null], (err) => {
     if (err) {
+      if (err.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({ message: "이미 등록된 쓰레기통 ID입니다." });
+      }
+
       console.error("쓰레기통 등록 실패:", err);
       return res.status(500).json({ message: "쓰레기통 등록 실패" });
     }
 
     res.json({
       message: "쓰레기통이 등록되었습니다.",
-      bin_id: result.insertId,
+      bin_id,
     });
   });
 });
-
 router.delete("/:bin_id", (req, res) => {
   const { bin_id } = req.params;
 

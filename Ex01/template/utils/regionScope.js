@@ -1,5 +1,3 @@
-const managerRegions = {};
-
 function getUser(reqOrUser) {
   if (!reqOrUser) return {};
   if (reqOrUser.session && reqOrUser.session.user) return reqOrUser.session.user;
@@ -11,16 +9,42 @@ function isOperator(reqOrUser) {
   return user.role === "operator";
 }
 
-function getRegions() {
-  return null;
+function parseRegions(value) {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
-function canViewLocation() {
-  return true;
+function getRegions(reqOrUser) {
+  const user = getUser(reqOrUser);
+  if (isOperator(user)) return null;
+  const regions = parseRegions(user.assigned_regions || user.manager_regions || user.regions);
+  return regions.length ? regions : null;
 }
 
-function filterRowsByRegion(reqOrUser, rows) {
-  return Array.isArray(rows) ? rows : [];
+function normalizeLocation(location) {
+  return String(location || "").replace(/\s+/g, " ").trim();
+}
+
+function locationMatchesRegions(location, regions) {
+  if (!regions || !regions.length) return true;
+  const normalized = normalizeLocation(location);
+  return regions.some((region) => normalized.includes(region));
+}
+
+function canViewLocation(reqOrUser, location) {
+  if (isOperator(reqOrUser)) return true;
+  return locationMatchesRegions(location, getRegions(reqOrUser));
+}
+
+function filterRowsByRegion(reqOrUser, rows, locationKey = "bin_loc") {
+  if (!Array.isArray(rows)) return [];
+  if (isOperator(reqOrUser)) return rows;
+  const regions = getRegions(reqOrUser);
+  if (!regions) return rows;
+  return rows.filter((row) => locationMatchesRegions(row[locationKey], regions));
 }
 
 function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
@@ -28,7 +52,7 @@ function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
 
   const byLocation = new Map();
   rows.forEach((row) => {
-    const location = String(row[locationKey] || "").replace(/\s+/g, " ").trim();
+    const location = normalizeLocation(row[locationKey]);
     const key = location || `__bin_${row.bin_id}`;
     const prev = byLocation.get(key);
     if (!prev || Number(row.bin_id) < Number(prev.bin_id)) {
@@ -39,12 +63,19 @@ function dedupeRowsByLocation(rows, locationKey = "bin_loc") {
   return Array.from(byLocation.values());
 }
 
-function buildLocationWhere() {
-  return { clause: "", params: [] };
+function buildLocationWhere(reqOrUser, column = "bin_loc") {
+  if (isOperator(reqOrUser)) return { clause: "", params: [] };
+  const regions = getRegions(reqOrUser);
+  if (!regions || !regions.length) return { clause: "", params: [] };
+
+  const conditions = regions.map(() => `${column} LIKE ?`).join(" OR ");
+  return {
+    clause: ` AND (${conditions})`,
+    params: regions.map((region) => `%${region}%`),
+  };
 }
 
 module.exports = {
-  managerRegions,
   getRegions,
   isOperator,
   canViewLocation,

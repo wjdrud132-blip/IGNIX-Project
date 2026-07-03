@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const alertController = require("../controllers/alertController");
 
 const router = express.Router();
@@ -10,6 +10,7 @@ router.get("/api/stats", alertController.getStats);
 
 router.post("/api/read-all", alertController.markAllRead);
 router.post("/api/read-selected", alertController.markSelectedRead);
+router.post("/api/delete-selected", alertController.deleteSelected);
 
 module.exports = router;
 

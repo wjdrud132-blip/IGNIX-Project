@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
@@ -65,28 +65,22 @@ async function getScopedAlerts(req) {
       s.flame AS flame_value,
       s.fire_risk
     FROM t_trashbin b
-    LEFT JOIN (
-      SELECT s1.*
-      FROM t_sensor s1
-      INNER JOIN (
-        SELECT bin_id, MAX(created_at) AS latest_created_at
-        FROM t_sensor
-        GROUP BY bin_id
-      ) latest_sensor
-        ON s1.bin_id = latest_sensor.bin_id
-       AND s1.created_at = latest_sensor.latest_created_at
-    ) s ON b.bin_id = s.bin_id
-    LEFT JOIN (
-      SELECT a1.*
-      FROM t_alert a1
-      INNER JOIN (
-        SELECT bin_id, MAX(alerted_at) AS latest_alerted_at
-        FROM t_alert
-        GROUP BY bin_id
-      ) latest
-        ON a1.bin_id = latest.bin_id
-       AND a1.alerted_at = latest.latest_alerted_at
-    ) a ON b.bin_id = a.bin_id
+    LEFT JOIN t_sensor s
+      ON s.sensor_id = (
+        SELECT s2.sensor_id
+        FROM t_sensor s2
+        WHERE s2.bin_id = b.bin_id
+        ORDER BY s2.created_at DESC, s2.sensor_id DESC
+        LIMIT 1
+      )
+    LEFT JOIN t_alert a
+      ON a.alert_id = (
+        SELECT a2.alert_id
+        FROM t_alert a2
+        WHERE a2.bin_id = b.bin_id
+        ORDER BY a2.alerted_at DESC, a2.alert_id DESC
+        LIMIT 1
+      )
     WHERE IFNULL(b.network_status, 1) <> 9
   `
 

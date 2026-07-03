@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -383,17 +383,24 @@
       </div>
     </div>
 
+    <div class="field">
+      <label>휴대전화</label>
+      <div class="input-wrap">
+        <i class="ti ti-phone"></i>
+        <input id="mgr_phone" type="tel" placeholder="010-0000-0000">
+      </div>
+    </div>
     <div class="agree-box">
       <label class="agree-line agree-all">
-        <input id="agree_all" type="checkbox" checked>
+        <input id="agree_all" type="checkbox">
         전체 동의
       </label>
       <label class="agree-line">
-        <input id="agree_terms" type="checkbox" checked>
+        <input id="agree_terms" type="checkbox">
         이용약관 동의 <span class="req">(필수)</span>
       </label>
       <label class="agree-line">
-        <input id="agree_privacy" type="checkbox" checked>
+        <input id="agree_privacy" type="checkbox">
         개인정보 처리방침 <span class="req">(필수)</span>
       </label>
     </div>
@@ -479,6 +486,7 @@
       const mgrName = document.getElementById("mgr_name").value.trim();
       const orgName = organization.value.trim();
       const emailId = document.getElementById("email_id").value.trim();
+      const mgrPhone = document.getElementById("mgr_phone").value.trim();
       const agreeTerms = document.getElementById("agree_terms").checked;
       const agreePrivacy = document.getElementById("agree_privacy").checked;
 
@@ -507,6 +515,7 @@
       sessionStorage.setItem("mgr_name", mgrName);
       sessionStorage.setItem("organization", orgName);
       sessionStorage.setItem("mgr_email", mgrEmail);
+      sessionStorage.setItem("mgr_phone", mgrPhone);
 
       return mgrEmail;
     }

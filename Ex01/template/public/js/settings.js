@@ -1,4 +1,4 @@
-﻿const serverUser = window.__FIDS_USER__ || {};
+const serverUser = window.__FIDS_USER__ || {};
 const role = serverUser.role || sessionStorage.getItem("role") || "manager";
 const canEditThreshold = role === "operator";
 const thresholdIds = ["dangerTemp", "warningTemp", "dangerSmoke", "warningSmoke"];
@@ -497,9 +497,24 @@ async function loadProfile() {
   if (sidebarEmail) sidebarEmail.textContent = profile.mgr_email || "";
 }
 async function saveProfile() {
+  const nameInput = document.getElementById("profileName");
+  const phoneInput = document.getElementById("profilePhone");
+  const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
+
+  if (!name) {
+    nameInput.focus();
+    return alert("이름은 필수입니다.");
+  }
+
+  if (!phone) {
+    phoneInput.focus();
+    return alert("휴대전화 번호는 필수입니다.");
+  }
+
   const body = {
-    mgr_name: document.getElementById("profileName").value,
-    mgr_phone: document.getElementById("profilePhone").value,
+    mgr_name: name,
+    mgr_phone: phone,
   };
   const res = await fetch("/settings/api/profile", {
     method: "POST",

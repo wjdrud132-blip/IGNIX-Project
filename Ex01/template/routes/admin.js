@@ -1,78 +1,140 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
 const requireOperator = require("../middlewares/requireOperator");
 const { sendManagerApprovalMail, sendManagerRejectMail } = require("../utils/mail");
 
+const GWANGJU_REGIONS = ["동구", "남구", "북구", "광산구", "서구"];
+
 const MSG = {
-  pendingListFail: "\uC2B9\uC778 \uB300\uAE30 \uBAA9\uB85D \uC870\uD68C \uC2E4\uD328",
-  approvedListFail: "\uC2B9\uC778 \uC644\uB8CC \uBAA9\uB85D \uC870\uD68C \uC2E4\uD328",
-  idRequired: "\uAD00\uB9AC\uC790 ID\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.",
-  lookupFail: "\uAD00\uB9AC\uC790 \uC870\uD68C \uC2E4\uD328",
-  notFound: "\uAD00\uB9AC\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-  approveFail: "\uAD00\uB9AC\uC790 \uC2B9\uC778 \uC2E4\uD328",
-  approveMailFail: "\uAD00\uB9AC\uC790 \uC2B9\uC778\uC740 \uC644\uB8CC\uB418\uC5C8\uC9C0\uB9CC \uC774\uBA54\uC77C \uBC1C\uC1A1\uC740 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-  approveDone: "\uAD00\uB9AC\uC790 \uC2B9\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uACE0 \uC2B9\uC778 \uC644\uB8CC \uC774\uBA54\uC77C\uC744 \uBC1C\uC1A1\uD588\uC2B5\uB2C8\uB2E4.",
-  rejectFail: "\uAD00\uB9AC\uC790 \uAC70\uC808 \uC2E4\uD328",
-  rejectMailFail: "\uAD00\uB9AC\uC790 \uAC00\uC785 \uC694\uCCAD\uC740 \uAC70\uC808\uB418\uC5C8\uC9C0\uB9CC \uC774\uBA54\uC77C \uBC1C\uC1A1\uC740 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.",
-  rejectDone: "\uAD00\uB9AC\uC790 \uAC00\uC785 \uC694\uCCAD\uC744 \uAC70\uC808\uD588\uACE0 \uAC70\uC808 \uC774\uBA54\uC77C\uC744 \uBC1C\uC1A1\uD588\uC2B5\uB2C8\uB2E4.",
+  pendingListFail: "승인 대기 목록 조회 실패",
+  approvedListFail: "승인 완료 목록 조회 실패",
+  rejectedListFail: "거절 처리 목록 조회 실패",
+  idRequired: "관리자 ID가 필요합니다.",
+  lookupFail: "관리자 조회 실패",
+  notFound: "관리자를 찾을 수 없습니다.",
+  approveFail: "관리자 승인 실패",
+  approveMailFail: "관리자 승인은 완료되었지만 이메일 발송은 실패했습니다.",
+  approveDone: "관리자 승인이 완료되었고 승인 완료 이메일을 발송했습니다.",
+  rejectFail: "관리자 거절 실패",
+  rejectMailFail: "관리자 가입 요청은 거절되었지만 이메일 발송은 실패했습니다.",
+  rejectDone: "관리자 가입 요청을 거절했고 거절 이메일을 발송했습니다.",
 };
 
-function getManagerById(mgrId, callback) {
-  const sql = `
-    SELECT mgr_id, mgr_email, mgr_name, mgr_phone, is_approved, joined_at
-    FROM t_manager
-    WHERE mgr_id = ?
-      AND role = 'manager'
-  `;
+function normalizeRegions(value) {
+  const list = Array.isArray(value) ? value : String(value || "").split(",");
+  return list
+    .map((item) => String(item || "").trim())
+    .filter((item) => GWANGJU_REGIONS.includes(item));
+}
 
-  conn.query(sql, [mgrId], (err, rows) => {
-    if (err) return callback(err);
-    callback(null, rows[0]);
+function ensureAdminColumns(callback) {
+  const alters = [
+    "ALTER TABLE t_manager ADD COLUMN mgr_org VARCHAR(100) NULL",
+    "ALTER TABLE t_manager ADD COLUMN assigned_regions VARCHAR(255) NULL",
+    "ALTER TABLE t_manager ADD COLUMN approval_status VARCHAR(20) NULL",
+    "ALTER TABLE t_manager ADD COLUMN rejected_at DATETIME NULL",
+  ];
+
+  let index = 0;
+  function next() {
+    if (index >= alters.length) return callback(null);
+    conn.query(alters[index], (err) => {
+      index += 1;
+      if (err && err.code !== "ER_DUP_FIELDNAME") return callback(err);
+      next();
+    });
+  }
+
+  next();
+}
+
+function managerSelect(whereClause) {
+  return `
+    SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, approval_status, is_approved, joined_at, rejected_at
+    FROM t_manager
+    WHERE ${whereClause}
+      AND role = 'manager'
+    ORDER BY COALESCE(rejected_at, joined_at) DESC, mgr_id DESC
+  `;
+}
+
+function getManagerById(mgrId, callback) {
+  ensureAdminColumns((columnErr) => {
+    if (columnErr) return callback(columnErr);
+
+    const sql = `
+      SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, approval_status, is_approved, joined_at, rejected_at
+      FROM t_manager
+      WHERE mgr_id = ?
+        AND role = 'manager'
+    `;
+
+    conn.query(sql, [mgrId], (err, rows) => {
+      if (err) return callback(err);
+      callback(null, rows[0]);
+    });
   });
 }
 
 router.get("/managers", requireOperator, (req, res) => {
-  const sql = `
-    SELECT mgr_id, mgr_email, mgr_name, mgr_phone, is_approved, joined_at
-    FROM t_manager
-    WHERE is_approved = 0
-      AND role = 'manager'
-    ORDER BY joined_at DESC
-  `;
-
-  conn.query(sql, (err, rows) => {
-    if (err) {
-      console.error("pending manager list failed:", err);
+  ensureAdminColumns((columnErr) => {
+    if (columnErr) {
+      console.error("admin column ensure failed:", columnErr);
       return res.status(500).json({ message: MSG.pendingListFail });
     }
 
-    res.json(rows);
+    conn.query(managerSelect("is_approved = '0' AND (approval_status IS NULL OR approval_status = 'pending')"), (err, rows) => {
+      if (err) {
+        console.error("pending manager list failed:", err);
+        return res.status(500).json({ message: MSG.pendingListFail });
+      }
+
+      res.json(rows);
+    });
   });
 });
 
 router.get("/managers/approved", requireOperator, (req, res) => {
-  const sql = `
-    SELECT mgr_id, mgr_email, mgr_name, mgr_phone, is_approved, joined_at
-    FROM t_manager
-    WHERE is_approved = 1
-      AND role = 'manager'
-    ORDER BY joined_at DESC
-  `;
-
-  conn.query(sql, (err, rows) => {
-    if (err) {
-      console.error("approved manager list failed:", err);
+  ensureAdminColumns((columnErr) => {
+    if (columnErr) {
+      console.error("admin column ensure failed:", columnErr);
       return res.status(500).json({ message: MSG.approvedListFail });
     }
 
-    res.json(rows);
+    conn.query(managerSelect("is_approved = '1' AND (approval_status IS NULL OR approval_status = 'approved')"), (err, rows) => {
+      if (err) {
+        console.error("approved manager list failed:", err);
+        return res.status(500).json({ message: MSG.approvedListFail });
+      }
+
+      res.json(rows);
+    });
+  });
+});
+
+router.get("/managers/rejected", requireOperator, (req, res) => {
+  ensureAdminColumns((columnErr) => {
+    if (columnErr) {
+      console.error("admin column ensure failed:", columnErr);
+      return res.status(500).json({ message: MSG.rejectedListFail });
+    }
+
+    conn.query(managerSelect("approval_status = 'rejected'"), (err, rows) => {
+      if (err) {
+        console.error("rejected manager list failed:", err);
+        return res.status(500).json({ message: MSG.rejectedListFail });
+      }
+
+      res.json(rows);
+    });
   });
 });
 
 router.post("/managers/approve", requireOperator, (req, res) => {
   const { mgr_id } = req.body;
+  const assignedRegions = normalizeRegions(req.body.assigned_regions || req.body.regions);
 
   if (!mgr_id) {
     return res.status(400).json({ message: MSG.idRequired });
@@ -90,12 +152,15 @@ router.post("/managers/approve", requireOperator, (req, res) => {
 
     const sql = `
       UPDATE t_manager
-      SET is_approved = 1
+      SET is_approved = '1',
+          approval_status = 'approved',
+          assigned_regions = ?,
+          rejected_at = NULL
       WHERE mgr_id = ?
         AND role = 'manager'
     `;
 
-    conn.query(sql, [mgr_id], async (err) => {
+    conn.query(sql, [assignedRegions.join(","), mgr_id], async (err) => {
       if (err) {
         console.error("manager approve failed:", err);
         return res.status(500).json({ message: MSG.approveFail });
@@ -131,10 +196,14 @@ router.post("/managers/reject", requireOperator, (req, res) => {
     }
 
     const sql = `
-      DELETE FROM t_manager
+      UPDATE t_manager
+      SET is_approved = '0',
+          approval_status = 'rejected',
+          rejected_at = NOW()
       WHERE mgr_id = ?
         AND role = 'manager'
-        AND is_approved = 0
+        AND is_approved = '0'
+        AND (approval_status IS NULL OR approval_status = 'pending')
     `;
 
     conn.query(sql, [mgr_id], async (err) => {

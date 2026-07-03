@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -16,9 +16,11 @@
     .sb-logo-sub2 { font-size: 10px; color: rgba(255,255,255,.3); margin-top: 3px; }
     .sb-logo-sub { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 2px; }
     .sb-nav { padding: 14px 10px; flex: 1; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: rgba(255,255,255,.55); cursor: pointer; margin-bottom: 2px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: rgba(255,255,255,.55); cursor: pointer; margin-bottom: 2px; position: relative; }
     .nav-item.active, .nav-item:hover { background: rgba(255,255,255,.10); color: #fff; }
     .nav-item i { font-size: 17px; }
+    .approval-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #ef4444; color: #fff; display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; }
+    .approval-badge.show { display: inline-flex; }
     .sb-bottom { padding: 14px 10px; border-top: 1px solid rgba(255,255,255,.08); }
     .sb-user { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 2px; }
     .sb-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -33,11 +35,12 @@
     .sub { font-size: 13px; color: #8b93a3; }
     .operator { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e8e9ed; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #555; }
     .operator i { color: #2d6be4; font-size: 18px; }
-    .summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .summary-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
     .summary-card { background: #fff; border: 1px solid #e8e9ed; border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; }
     .summary-label { font-size: 12px; font-weight: 800; color: #667085; margin-bottom: 8px; }
     .summary-num { font-size: 28px; font-weight: 800; color: #10172f; }
     .summary-icon { width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; color: #2d6be4; display: grid; place-items: center; font-size: 22px; }
+    .summary-icon.reject { background: #fff1f2; color: #e11d48; }
     .tab-row { display: inline-flex; gap: 6px; background: #eef2f7; padding: 4px; border-radius: 10px; margin-bottom: 14px; }
     .tab-btn { height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #64748b; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
     .tab-btn.active { background: #fff; color: #10172f; box-shadow: 0 1px 5px rgba(15,23,42,.08); }
@@ -47,16 +50,25 @@
     .refresh-btn { height: 34px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #d8e1f2; background: #f4f7fd; color: #4a6fa5; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
     .refresh-btn:hover { background: #e8effb; }
     table { width: 100%; border-collapse: collapse; }
-    th { background: #f8fafc; text-align: left; font-size: 12px; color: #667085; font-weight: 800; padding: 14px 18px; border-bottom: 1px solid #eef0f4; }
-    td { font-size: 13px; color: #333; padding: 15px 18px; border-bottom: 1px solid #f1f3f6; }
+    th { background: #f8fafc; text-align: left; font-size: 12px; color: #667085; font-weight: 800; padding: 14px 16px; border-bottom: 1px solid #eef0f4; }
+    td { font-size: 13px; color: #333; padding: 15px 16px; border-bottom: 1px solid #f1f3f6; vertical-align: top; }
     tr:last-child td { border-bottom: none; }
-    .email { color: #64748b; }
-    .badge { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
-    .action-group { display: flex; gap: 8px; align-items: center; }
+    .email, .muted { color: #64748b; }
+    .org { color: #1f2937; font-weight: 700; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .badge.approved { background: #dcfce7; color: #15803d; }
+    .badge.rejected { background: #ffe4e6; color: #e11d48; }
+    .action-group { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
     .approve-btn { height: 32px; padding: 0 12px; border-radius: 8px; border: none; background: #1a2235; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .approve-btn:hover { background: #243040; }
     .reject-btn { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #fecaca; background: #fff5f5; color: #dc2626; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit; }
     .reject-btn:hover { background: #fee2e2; }
+    .region-options { display: flex; flex-wrap: wrap; gap: 6px; min-width: 210px; }
+    .region-toggle input { display: none; }
+    .region-toggle span { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #dbe3ef; background: #fff; color: #64748b; font-size: 12px; font-weight: 800; cursor: pointer; }
+    .region-toggle input:checked + span { border-color: #2d6be4; background: #eff6ff; color: #2563eb; }
+    .region-readonly { display: flex; flex-wrap: wrap; gap: 5px; }
+    .region-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 999px; background: #eef2ff; color: #3152a4; font-size: 12px; font-weight: 800; }
     .empty { padding: 42px 20px; text-align: center; color: #9aa0ad; font-size: 14px; }
     .empty i { display: block; font-size: 34px; color: #c6ccd6; margin-bottom: 10px; }
   </style>
@@ -69,29 +81,15 @@
         <div class="sb-logo-sub2">쓰레기통 화재 감지 시스템</div>
         <div class="sb-logo-sub">관리자 대시보드</div>
       </div>
-<div class="sb-nav">
-  <div class="nav-item" onclick="location.href='/dashboard'">
-    <i class="ti ti-home"></i>대시보드
-  </div>
-
-  <div class="nav-item" onclick="location.href='/trashbins'">
-    <i class="ti ti-trash"></i>쓰레기통 관리
-  </div>
-
-  <div class="nav-item" onclick="location.href='/realtime'">
-    <i class="ti ti-chart-line"></i>실시간 모니터링
-  </div>
-
-  <div class="nav-item" onclick="location.href='/alert'">
-    <i class="ti ti-bell"></i>알림 기록
-  </div>
-
-  <div class="nav-item active" onclick="location.href='/admin/approval'">
-    <i class="ti ti-user-check"></i>관리자 승인 관리
-  </div>
-
-  <div class="nav-item" onclick="location.href='/settings'"><i class="ti ti-settings"></i>설정</div><div class="nav-item" onclick="location.href='/'"><i class="ti ti-home-2"></i>메인페이지</div>
-</div>
+      <div class="sb-nav">
+        <div class="nav-item" onclick="location.href='/dashboard'"><i class="ti ti-home"></i>대시보드</div>
+        <div class="nav-item" onclick="location.href='/trashbins'"><i class="ti ti-trash"></i>쓰레기통 관리</div>
+        <div class="nav-item" onclick="location.href='/realtime'"><i class="ti ti-chart-line"></i>실시간 모니터링</div>
+        <div class="nav-item" onclick="location.href='/alert'"><i class="ti ti-bell"></i>알림 기록</div>
+        <div class="nav-item active operator-menu" onclick="location.href='/admin/approval'"><i class="ti ti-user-check"></i>관리자 승인 관리<span id="approvalBadge" class="approval-badge"></span></div>
+        <div class="nav-item" onclick="location.href='/settings'"><i class="ti ti-settings"></i>설정</div>
+        <div class="nav-item" onclick="location.href='/'"><i class="ti ti-home-2"></i>메인페이지</div>
+      </div>
       <div class="sb-bottom">
         <div class="sb-user">
           <div class="sb-avatar"><i class="ti ti-user"></i></div>
@@ -103,30 +101,41 @@
         <div id="logoutBtn" class="sb-logout"><i class="ti ti-logout"></i>로그아웃</div>
       </div>
     </aside>
+
     <main class="main">
       <div class="topbar">
         <div>
           <div class="title">운영자 승인 관리</div>
-          <div class="sub">일반 관리자 가입 요청을 확인하고 승인합니다.</div>
+          <div class="sub">일반 관리자 가입 요청을 확인하고 담당 구역을 배정합니다.</div>
         </div>
         <div class="operator"><i class="ti ti-shield-check"></i><span id="operatorName">운영자</span></div>
       </div>
+
       <div class="summary-row">
         <div class="summary-card"><div><div class="summary-label">승인 대기</div><div><span id="pendingCount" class="summary-num">0</span> 건</div></div><div class="summary-icon"><i class="ti ti-user-question"></i></div></div>
         <div class="summary-card"><div><div class="summary-label">승인 완료</div><div><span id="approvedCount" class="summary-num">0</span> 건</div></div><div class="summary-icon"><i class="ti ti-user-check"></i></div></div>
+        <div class="summary-card"><div><div class="summary-label">거절 처리</div><div><span id="rejectedCount" class="summary-num">0</span> 건</div></div><div class="summary-icon reject"><i class="ti ti-user-x"></i></div></div>
         <div class="summary-card"><div><div class="summary-label">현재 계정</div><div id="summaryEmail" class="summary-num" style="font-size:18px">operator@korea.kr</div></div><div class="summary-icon"><i class="ti ti-id"></i></div></div>
       </div>
-      <div class="tab-row"><button id="pendingTab" class="tab-btn active" type="button" onclick="switchTab('pending')">승인 대기 목록</button><button id="approvedTab" class="tab-btn" type="button" onclick="switchTab('approved')">승인처리완료</button></div>
+
+      <div class="tab-row">
+        <button id="pendingTab" class="tab-btn active" type="button" onclick="switchTab('pending')">승인 대기 목록</button>
+        <button id="approvedTab" class="tab-btn" type="button" onclick="switchTab('approved')">승인처리완료</button>
+        <button id="rejectedTab" class="tab-btn" type="button" onclick="switchTab('rejected')">거절 처리 목록</button>
+      </div>
+
       <section class="card">
         <div class="card-head">
-          <div class="card-title">승인 대기 목록</div>
+          <div id="cardTitle" class="card-title">승인 대기 목록</div>
           <button id="refreshBtn" class="refresh-btn" type="button"><i class="ti ti-refresh"></i>새로고침</button>
         </div>
         <div id="tableArea"></div>
       </section>
     </main>
   </div>
+
   <script>
+    const regionOptions = ["동구", "남구", "북구", "광산구", "서구"];
     const role = sessionStorage.getItem("role");
     const mgrName = sessionStorage.getItem("mgr_name");
     const mgrEmail = sessionStorage.getItem("mgr_email");
@@ -135,52 +144,113 @@
     userEmail.textContent = mgrEmail || "operator@korea.kr";
     operatorName.textContent = mgrName || "운영자";
     summaryEmail.textContent = mgrEmail || "operator@korea.kr";
+
+    let currentTab = "pending";
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function formatDate(value) {
       if (!value) return "-";
       const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
       return date.getFullYear() + "." + String(date.getMonth() + 1).padStart(2, "0") + "." + String(date.getDate()).padStart(2, "0") + " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
     }
-    let currentTab = "pending";
+
+    function parseRegions(value) {
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+    }
+
+    function renderRegionEditor(manager) {
+      const selected = new Set(parseRegions(manager.assigned_regions));
+      return '<div class="region-options">' + regionOptions.map((region) => {
+        const checked = selected.has(region) ? " checked" : "";
+        return '<label class="region-toggle"><input type="checkbox" data-region-for="' + manager.mgr_id + '" value="' + region + '"' + checked + '><span>' + region + '</span></label>';
+      }).join("") + '</div>';
+    }
+
+    function renderRegionReadonly(value) {
+      const regions = parseRegions(value);
+      if (!regions.length) return '<span class="muted">미배정</span>';
+      return '<div class="region-readonly">' + regions.map((region) => '<span class="region-chip">' + escapeHtml(region) + '</span>').join("") + '</div>';
+    }
+
+    function getSelectedRegions(mgrId) {
+      return Array.from(document.querySelectorAll('[data-region-for="' + mgrId + '"]:checked')).map((input) => input.value);
+    }
 
     function switchTab(tab) {
       currentTab = tab;
       pendingTab.classList.toggle("active", tab === "pending");
       approvedTab.classList.toggle("active", tab === "approved");
+      rejectedTab.classList.toggle("active", tab === "rejected");
+      cardTitle.textContent = tab === "approved" ? "승인 완료 목록" : tab === "rejected" ? "거절 처리 목록" : "승인 대기 목록";
       loadManagers();
     }
 
+    async function fetchManagers(type) {
+      const url = type === "approved" ? "/admin/managers/approved" : type === "rejected" ? "/admin/managers/rejected" : "/admin/managers";
+      const response = await fetch(url);
+      if (!response.ok) return [];
+      const rows = await response.json();
+      return Array.isArray(rows) ? rows : [];
+    }
+
     async function loadCounts() {
-      const pendingResponse = await fetch("/admin/managers");
-      const approvedResponse = await fetch("/admin/managers/approved");
-      const pendingManagers = await pendingResponse.json();
-      const approvedManagers = await approvedResponse.json();
-      pendingCount.textContent = Array.isArray(pendingManagers) ? pendingManagers.length : 0;
-      approvedCount.textContent = Array.isArray(approvedManagers) ? approvedManagers.length : 0;
+      const [pendingManagers, approvedManagers, rejectedManagers] = await Promise.all([
+        fetchManagers("pending"),
+        fetchManagers("approved"),
+        fetchManagers("rejected"),
+      ]);
+      pendingCount.textContent = pendingManagers.length;
+      approvedCount.textContent = approvedManagers.length;
+      rejectedCount.textContent = rejectedManagers.length;
+      approvalBadge.textContent = pendingManagers.length;
+      approvalBadge.classList.toggle("show", pendingManagers.length > 0);
+      return { pendingManagers, approvedManagers, rejectedManagers };
     }
 
     async function loadManagers() {
-      const url = currentTab === "approved" ? "/admin/managers/approved" : "/admin/managers";
-      const response = await fetch(url);
-      const managers = await response.json();
-      await loadCounts();
+      const counts = await loadCounts();
+      const managers = currentTab === "approved" ? counts.approvedManagers : currentTab === "rejected" ? counts.rejectedManagers : counts.pendingManagers;
 
-      if (!Array.isArray(managers) || !managers.length) {
-        const emptyText = currentTab === "approved" ? "승인 처리 완료된 관리자가 없습니다." : "승인 대기 중인 관리자가 없습니다.";
+      if (!managers.length) {
+        const emptyText = currentTab === "approved" ? "승인 처리 완료된 관리자가 없습니다." : currentTab === "rejected" ? "거절 처리된 관리자가 없습니다." : "승인 대기 중인 관리자가 없습니다.";
         tableArea.innerHTML = '<div class="empty"><i class="ti ti-user-check"></i>' + emptyText + '</div>';
         return;
       }
 
-      const tableTitle = currentTab === "approved" ? "승인 완료" : "승인 대기";
-      tableArea.innerHTML = `<table><thead><tr><th>이름</th><th>이메일</th><th>전화번호</th><th>요청일시</th><th>상태</th><th>관리</th></tr></thead><tbody>${managers.map((manager) => {
-        const actionHtml = currentTab === "approved" ? "-" : `<div class="action-group"><button class="approve-btn" type="button" onclick="approveManager(${manager.mgr_id})">승인</button><button class="reject-btn" type="button" onclick="rejectManager(${manager.mgr_id})">거절</button></div>`;
-        const statusIcon = currentTab === "approved" ? "ti-check" : "ti-clock";
-        return `<tr><td><b>${manager.mgr_name || "-"}</b></td><td class="email">${manager.mgr_email || "-"}</td><td>${manager.mgr_phone || "-"}</td><td>${formatDate(manager.joined_at)}</td><td><span class="badge"><i class="ti ${statusIcon}"></i>${tableTitle}</span></td><td>${actionHtml}</td></tr>`;
+      tableArea.innerHTML = `<table><thead><tr><th>이름</th><th>이메일</th><th>소속기관</th><th>전화번호</th><th>${currentTab === "rejected" ? "거절일시" : "요청일시"}</th><th>담당 구역</th><th>상태</th><th>관리</th></tr></thead><tbody>${managers.map((manager) => {
+        const statusText = currentTab === "approved" ? "승인 완료" : currentTab === "rejected" ? "거절 처리" : "승인 대기";
+        const statusIcon = currentTab === "approved" ? "ti-check" : currentTab === "rejected" ? "ti-x" : "ti-clock";
+        const statusClass = currentTab === "approved" ? "approved" : currentTab === "rejected" ? "rejected" : "";
+        const dateValue = currentTab === "rejected" ? manager.rejected_at : manager.joined_at;
+        const regionHtml = currentTab === "pending" ? renderRegionEditor(manager) : renderRegionReadonly(manager.assigned_regions);
+        const actionHtml = currentTab === "pending"
+          ? `<div class="action-group"><button class="approve-btn" type="button" onclick="approveManager(${manager.mgr_id})">승인</button><button class="reject-btn" type="button" onclick="rejectManager(${manager.mgr_id})">거절</button></div>`
+          : "-";
+        return `<tr><td><b>${escapeHtml(manager.mgr_name || "-")}</b></td><td class="email">${escapeHtml(manager.mgr_email || "-")}</td><td class="org">${escapeHtml(manager.mgr_org || "미등록")}</td><td>${escapeHtml(manager.mgr_phone || "-")}</td><td>${formatDate(dateValue)}</td><td>${regionHtml}</td><td><span class="badge ${statusClass}"><i class="ti ${statusIcon}"></i>${statusText}</span></td><td>${actionHtml}</td></tr>`;
       }).join("")}</tbody></table>`;
     }
 
     async function approveManager(mgrId) {
+      const selectedRegions = getSelectedRegions(mgrId);
+      if (!selectedRegions.length) {
+        alert("담당 구역을 하나 이상 선택해주세요.");
+        return;
+      }
       if (!confirm("이 관리자를 승인하시겠습니까?")) return;
-      const response = await fetch("/admin/managers/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mgr_id: mgrId }) });
+      const response = await fetch("/admin/managers/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mgr_id: mgrId, assigned_regions: selectedRegions })
+      });
       const result = await response.json();
       alert(result.message || "처리가 완료되었습니다.");
       loadManagers();
@@ -188,27 +258,25 @@
 
     async function rejectManager(mgrId) {
       if (!confirm("이 관리자 가입 요청을 거절하시겠습니까?")) return;
-      const response = await fetch("/admin/managers/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mgr_id: mgrId }) });
+      const response = await fetch("/admin/managers/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mgr_id: mgrId })
+      });
       const result = await response.json();
       alert(result.message || "거절 처리되었습니다.");
       loadManagers();
     }
+
     refreshBtn.addEventListener("click", loadManagers);
     logoutBtn.addEventListener("click", async () => {
       try { await fetch("/manager/logout", { method: "POST" }); } catch (error) {}
       sessionStorage.clear();
-      alert("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+      alert("로그아웃되었습니다.");
       location.replace("/");
     });
+
     loadManagers();
   </script>
-
-<script>
-  window.addEventListener("pageshow", function () {
-    if (!sessionStorage.getItem("role")) {
-      location.replace("/");
-    }
-  });
-</script>
 </body>
 </html>
