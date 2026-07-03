@@ -387,7 +387,7 @@
       <label>휴대전화</label>
       <div class="input-wrap">
         <i class="ti ti-phone"></i>
-        <input id="mgr_phone" type="tel" placeholder="010-0000-0000">
+        <input id="mgr_phone" type="tel" placeholder="010-0000-0000" required>
       </div>
     </div>
     <div class="agree-box">
@@ -502,6 +502,12 @@
 
       if (!emailId) {
         alert("이메일을 입력해주세요.");
+        return null;
+      }
+
+      if (!mgrPhone) {
+        alert("\uD734\uB300\uC804\uD654 \uBC88\uD638\uB294 \uD544\uC218\uC785\uB2C8\uB2E4.");
+        document.getElementById("mgr_phone").focus();
         return null;
       }
 

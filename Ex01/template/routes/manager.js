@@ -176,10 +176,14 @@ router.post("/join", (req, res) => {
     return res.send("필수 회원정보가 누락되었습니다.");
   }
 
+  if (!mgr_phone || !mgr_phone.trim()) {
+    return res.status(400).send("\uD734\uB300\uC804\uD654 \uBC88\uD638\uB294 \uD544\uC218\uC785\uB2C8\uB2E4.");
+  }
+
   const email = mgr_email.trim();
   const password = mgr_pw.trim();
   const name = mgr_name.trim();
-  const phone = mgr_phone ? mgr_phone.trim() : "";
+  const phone = mgr_phone.trim();
   const org = mgr_org ? mgr_org.trim() : "";
 
   const sql = `
