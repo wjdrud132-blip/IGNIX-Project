@@ -35,10 +35,30 @@ function getSensorModel(thresholds, callback) {
   }
 
   const sql = `
-    SELECT bin_id, temp, gas, flame, fire_risk
-    FROM t_sensor
-    WHERE temp IS NOT NULL
-      AND gas IS NOT NULL
+    SELECT
+      bin_id,
+      temp,
+      gas,
+      flame,
+      fire_risk,
+      CASE
+        WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+        ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+      END AS temp_change,
+      CASE
+        WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+        ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+      END AS gas_change
+    FROM (
+      SELECT
+        s.*,
+        LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
+        LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
+        LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
+      FROM t_sensor s
+      WHERE s.temp IS NOT NULL
+        AND s.gas IS NOT NULL
+    ) sensor_changes
   `;
 
   conn.query(sql, (err, rows) => {
@@ -184,7 +204,7 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
     await queryAsync(
       `INSERT INTO t_alert
         (bin_id, alert_type, alert_msg, alerted_at, is_received, received_at, mgr_id)
-       SELECT ?, ?, ?, ?, 'N', ?, ?
+       SELECT ?, ?, ?, ?, 'N', NULL, ?
        FROM DUAL
        WHERE NOT EXISTS (
          SELECT 1
@@ -197,7 +217,6 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
         row.bin_id,
         row.alert_type,
         alertMessageFor(row),
-        row.sensor_created_at,
         row.sensor_created_at,
         row.mgr_id,
         row.bin_id,
@@ -242,25 +261,42 @@ router.get("/list", (req, res) => {
         ELSE 'normal'
       END AS alert_type,
       COALESCE(a.alert_msg, '') AS alert_msg,
-      COALESCE(a.alerted_at, s.created_at, b.created_at) AS alerted_at,
+      COALESCE(s.created_at, a.alerted_at, b.created_at) AS alerted_at,
       a.is_received,
       s.sensor_id,
       s.temp AS temp_value,
       s.gas AS smoke_value,
       s.flame AS flame_value,
       s.fire_risk,
-      s.created_at AS sensor_created_at
+      s.created_at AS sensor_created_at,
+      s.prev_temp,
+      s.prev_gas,
+      s.prev_created_at,
+      CASE
+        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.temp - s.prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
+      END AS temp_change,
+      CASE
+        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.gas - s.prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
+      END AS gas_change
     FROM t_trashbin b
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
-    LEFT JOIN t_sensor s
-      ON s.sensor_id = (
-        SELECT s2.sensor_id
-        FROM t_sensor s2
-        WHERE s2.bin_id = b.bin_id
-        ORDER BY s2.created_at DESC, s2.sensor_id DESC
-        LIMIT 1
-      )
+    LEFT JOIN (
+      SELECT *
+      FROM (
+        SELECT
+          s1.*,
+          LAG(s1.temp) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_temp,
+          LAG(s1.gas) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_gas,
+          LAG(s1.created_at) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_created_at,
+          ROW_NUMBER() OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at DESC, s1.sensor_id DESC) AS recent_rank
+        FROM t_sensor s1
+      ) latest_sensor
+      WHERE latest_sensor.recent_rank = 1
+    ) s
+      ON s.bin_id = b.bin_id
     LEFT JOIN t_alert a
       ON a.alert_id = (
         SELECT a2.alert_id

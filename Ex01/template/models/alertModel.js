@@ -50,14 +50,7 @@ async function getLogs(req) {
           AND a2.alerted_at = a.alerted_at
       )
     ORDER BY
-      CASE a.alert_type
-        WHEN 'danger' THEN 1
-        WHEN 'warning' THEN 2
-        WHEN 'normal' THEN 3
-        ELSE 4
-      END,
       a.alerted_at DESC,
-      a.bin_id ASC,
       a.alert_id DESC
   `;
 
@@ -81,11 +74,11 @@ async function markAllRead(req) {
     UPDATE t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
     SET
-      a.is_received = 'Y',
       a.received_at = CASE
-        WHEN a.is_received = 'Y' THEN a.received_at
+        WHEN a.received_at IS NOT NULL THEN a.received_at
         ELSE NOW()
-      END
+      END,
+      a.is_received = 'Y'
     WHERE a.is_received <> 'Y'
       AND (b.network_status IS NULL OR b.network_status <> 9)
       ${scope.clause}
@@ -108,11 +101,11 @@ async function markSelectedRead(req, alertIds) {
     UPDATE t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
     SET
-      a.is_received = 'Y',
       a.received_at = CASE
-        WHEN a.is_received = 'Y' THEN a.received_at
+        WHEN a.received_at IS NOT NULL THEN a.received_at
         ELSE NOW()
-      END
+      END,
+      a.is_received = 'Y'
     WHERE a.alert_id IN (${placeholders})
       AND a.is_received <> 'Y'
       AND (b.network_status IS NULL OR b.network_status <> 9)

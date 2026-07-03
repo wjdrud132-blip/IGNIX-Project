@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
@@ -56,7 +56,7 @@ async function getScopedAlerts(req) {
         ELSE 'normal'
       END AS rule_status,
       COALESCE(a.alert_msg, '') AS alert_msg,
-      COALESCE(a.alerted_at, s.created_at, b.created_at) AS alerted_at,
+      COALESCE(s.created_at, a.alerted_at, b.created_at) AS alerted_at,
       COALESCE(a.is_received, 'N') AS is_received,
       b.bin_loc,
       b.installed_at,
@@ -137,6 +137,74 @@ router.get("/list", async (req, res) => {
   }
 });
 
+
+router.get("/daily-records", async (req, res) => {
+  try {
+    const sql = `
+      SELECT *
+      FROM (
+        SELECT
+          CONCAT('sensor-', s.sensor_id) AS alert_id,
+          b.bin_id,
+          b.bin_loc,
+          b.installed_at,
+          b.network_status,
+          s.sensor_id,
+          s.temp AS temp_value,
+          s.gas AS smoke_value,
+          s.flame AS flame_value,
+          s.fire_risk,
+          s.created_at AS alerted_at,
+          DATE_FORMAT(s.created_at, '%Y-%m-%d') AS record_date,
+          CASE
+            WHEN s.fire_risk = 2 THEN 'danger'
+            WHEN s.fire_risk = 1 THEN 'warning'
+            ELSE 'normal'
+          END AS rule_status,
+          ROW_NUMBER() OVER (
+            PARTITION BY s.bin_id, DATE(s.created_at)
+            ORDER BY s.created_at DESC, s.sensor_id DESC
+          ) AS record_rank
+        FROM t_sensor s
+        INNER JOIN t_trashbin b ON b.bin_id = s.bin_id
+        WHERE IFNULL(b.network_status, 1) <> 9
+      ) latest
+      WHERE record_rank = 1
+      ORDER BY alerted_at DESC, bin_id ASC
+      LIMIT 500
+    `;
+
+    const thresholds = await getThresholds();
+    const aiEnabled = await getAiEnabled();
+    const scopedRows = filterRowsByRegion(req, await query(sql), "bin_loc");
+
+    const rows = scopedRows.map((row) => {
+      const ai = judgeDanger({
+        ...row,
+        alert_type: row.rule_status,
+        alert_msg: "",
+      }, thresholds, aiEnabled);
+
+      return {
+        ...row,
+        display_bin_id: displayBinId(row.bin_id),
+        alert_type: ai.status,
+        ai_enabled: aiEnabled ? "Y" : "N",
+        temp_value: ai.sensor.temp,
+        smoke_value: ai.sensor.smoke,
+        flame_value: ai.sensor.flame,
+        alert_msg: `온도 ${ai.sensor.temp ?? "-"} / 연기 감지값 ${ai.sensor.smoke ?? "-"} / 불꽃 감지 ${Number(ai.sensor.flame) === 1 ? "O" : "X"}`,
+        is_received: "Y",
+      };
+    });
+
+    res.json(rows);
+  } catch (err) {
+    console.error("날짜별 센서 기록 조회 실패:", err);
+    res.status(500).json({ message: "날짜별 센서 기록 조회 실패" });
+  }
+});
+
 router.post("/read-all", async (req, res) => {
   try {
     const scope = buildLocationWhere(req, "b.bin_loc");
@@ -144,11 +212,11 @@ router.post("/read-all", async (req, res) => {
       UPDATE t_alert a
       LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
       SET
-        a.is_received = 'Y',
         a.received_at = CASE
-          WHEN a.is_received = 'Y' THEN a.received_at
+          WHEN a.received_at IS NOT NULL THEN a.received_at
           ELSE NOW()
-        END
+        END,
+        a.is_received = 'Y'
       WHERE a.is_received <> 'Y'
         AND a.alert_type <> 'normal'
         AND (b.network_status IS NULL OR b.network_status <> 9)
@@ -166,6 +234,8 @@ router.post("/read-all", async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
 

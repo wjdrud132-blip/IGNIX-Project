@@ -1,8 +1,8 @@
 const defaultThresholds = Object.freeze({
-  dangerTemp: 80,
-  warningTemp: 55,
-  dangerSmoke: 300,
-  warningSmoke: 100,
+  dangerTemp: 60,
+  warningTemp: 40,
+  dangerSmoke: 230,
+  warningSmoke: 120,
 });
 
 function originalStatus(row) {
@@ -77,6 +77,14 @@ function stats(rows, field) {
   };
 }
 
+function positiveChangeThreshold(values, fallback) {
+  const positives = values
+    .map(toNumber)
+    .filter((value) => value !== null && value > 0);
+  const p90 = percentile(positives, 90);
+  return isNumber(p90) && p90 > 0 ? p90 : fallback;
+}
+
 function trainSensorModel(rows = [], thresholds = defaultThresholds) {
   const samples = rows
     .map((row) => ({
@@ -116,8 +124,8 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
   const warningTemp = Math.max(thresholds.warningTemp, midpoint(normalTempStats.p90, warningTempStats.p75, thresholds.warningTemp));
   const dangerTemp = Math.max(thresholds.dangerTemp, warningTemp + 1, midpoint(warningTempStats.p90, dangerTempStats.p75, thresholds.dangerTemp));
 
-  const gasChangeP90 = percentile(samples.map((row) => row.gas_change), 90) ?? 0;
-  const tempChangeP90 = percentile(samples.map((row) => row.temp_change), 90) ?? 0;
+  const gasChangeP90 = positiveChangeThreshold(samples.map((row) => row.gas_change), 20);
+  const tempChangeP90 = positiveChangeThreshold(samples.map((row) => row.temp_change), 2);
 
   const ambientSmokeLimit = Math.max(thresholds.warningSmoke, percentile(samples.map((row) => row.smoke), 75) ?? thresholds.warningSmoke);
   const ambientSamples = samples.filter((row) =>
@@ -177,8 +185,8 @@ function judgeWithModel(row, sensor, model) {
   const flame = sensor.flame;
   const gasChange = firstNumber(row.gas_change, row.smoke_change, 0);
   const tempChange = firstNumber(row.temp_change, 0);
-  const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && gasChange >= model.gasChangeP90 && gasChange > 0;
-  const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && tempChange >= model.tempChangeP90 && tempChange > 0;
+  const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && model.gasChangeP90 > 0 && gasChange >= model.gasChangeP90;
+  const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && model.tempChangeP90 > 0 && tempChange >= model.tempChangeP90;
   const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
 
   const flameIsUseful = flame === 1 && (

@@ -322,8 +322,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
     }
 
     function sortRows(rows) {
-      const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : type === "normal" ? 3 : 4;
-      return [...rows].sort((a, b) => rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id) || new Date(b.alerted_at) - new Date(a.alerted_at));
+      return [...rows].sort((a, b) => new Date(b.alerted_at) - new Date(a.alerted_at) || Number(b.alert_id || 0) - Number(a.alert_id || 0));
     }
 
     function rowKey(row) {

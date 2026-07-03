@@ -5,10 +5,10 @@ const requireOperator = require("../middlewares/requireOperator");
 const router = express.Router();
 
 const defaultThresholds = Object.freeze({
-  dangerTemp: 80,
-  warningTemp: 55,
-  dangerSmoke: 300,
-  warningSmoke: 100,
+  dangerTemp: 60,
+  warningTemp: 40,
+  dangerSmoke: 230,
+  warningSmoke: 120,
 });
 
 const defaultSystemSettings = Object.freeze({

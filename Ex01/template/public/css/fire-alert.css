@@ -179,6 +179,10 @@
   color: #fff;
 }
 
+.fire-alert-overlay.warning .fire-alert-top {
+  background: #d97706;
+}
+
 .fire-alert-top h2 {
   margin: 6px 0 0;
   font-size: 21px;
@@ -220,6 +224,10 @@
   border: 1.5px solid #fff;
 }
 
+.fire-alert-overlay.warning .fire-badge span {
+  background: #fbbf24;
+}
+
 .fire-alert-overlay .fire-alert-body {
   padding: 22px 26px 0;
 }
@@ -258,6 +266,10 @@
   color: #ef232a !important;
 }
 
+.fire-alert-overlay.warning .danger-text {
+  color: #d97706 !important;
+}
+
 .fire-alert-date {
   margin-top: 18px;
   padding-top: 14px;
@@ -287,6 +299,10 @@
   border: 0;
   background: #ef232a;
   color: #fff;
+}
+
+.fire-alert-overlay.warning .fire-move-btn {
+  background: #f59e0b;
 }
 
 .fire-close-btn {
