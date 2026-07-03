@@ -4,6 +4,14 @@ const canEditThreshold = role === "operator";
 const thresholdIds = ["dangerTemp", "warningTemp", "dangerSmoke", "warningSmoke"];
 let originalProfileEmail = "";
 
+function formatAssignedRegions(value) {
+  const regions = String(value || "")
+    .split(",")
+    .map((region) => region.trim())
+    .filter(Boolean);
+  return regions.length ? regions.join(", ") : "\uB2F4\uB2F9 \uB3D9 \uBBF8\uBC30\uC815";
+}
+
 function setSidebarUser(name, email) {
   const displayName =
     name ||
@@ -488,6 +496,10 @@ async function loadProfile() {
   document.getElementById("profileOrg").value = profile.role === "operator" ? "광주광역시 동구청" : (profile.mgr_org || sessionStorage.getItem("mgr_org") || sessionStorage.getItem("organization") || "소속 기관 미등록");
   document.getElementById("profileEmail").value = profile.mgr_email || "";
   document.getElementById("profilePhone").value = profile.mgr_phone || "";
+  const assignedRegionsInput = document.getElementById("profileAssignedRegions");
+  if (assignedRegionsInput) {
+    assignedRegionsInput.value = profile.role === "operator" ? "\uC804\uCCB4 \uAD6C\uC5ED" : formatAssignedRegions(profile.assigned_regions);
+  }
   document.getElementById("accountRole").value = profile.role === "operator" ? "운영자" : "일반 관리자";
   document.getElementById("approvalStatus").value = Number(profile.is_approved) === 1 ? "승인 완료" : "승인 대기";
 

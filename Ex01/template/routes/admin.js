@@ -5,7 +5,14 @@ const conn = require("../config/db");
 const requireOperator = require("../middlewares/requireOperator");
 const { sendManagerApprovalMail, sendManagerRejectMail } = require("../utils/mail");
 
-const GWANGJU_REGIONS = ["동구", "남구", "북구", "광산구", "서구"];
+const GWANGJU_DONGS_BY_DISTRICT = {
+  "동구": ["충장동", "동명동", "계림1동", "계림2동", "산수1동", "산수2동", "지산1동", "지산2동", "서남동", "학동", "학운동", "지원1동", "지원2동"],
+  "남구": ["양림동", "방림1동", "방림2동", "봉선1동", "봉선2동", "사직동", "월산동", "월산4동", "월산5동", "백운1동", "백운2동", "주월1동", "주월2동", "진월동", "효덕동", "송암동", "대촌동"],
+  "북구": ["중흥1동", "중흥2동", "중흥3동", "중앙동", "임동", "신안동", "용봉동", "운암1동", "운암2동", "운암3동", "동림동", "우산동", "풍향동", "문화동", "문흥1동", "문흥2동", "두암1동", "두암2동", "두암3동", "삼각동", "일곡동", "매곡동", "오치1동", "오치2동", "석곡동", "건국동", "양산동", "신용동"],
+  "광산구": ["송정1동", "송정2동", "도산동", "신흥동", "어룡동", "우산동", "월곡1동", "월곡2동", "비아동", "첨단1동", "첨단2동", "신가동", "운남동", "수완동", "하남동", "임곡동", "동곡동", "평동", "삼도동", "본량동", "신창동"],
+  "서구": ["양동", "양3동", "농성1동", "농성2동", "광천동", "유덕동", "치평동", "상무1동", "상무2동", "화정1동", "화정2동", "화정3동", "화정4동", "서창동", "금호1동", "금호2동", "풍암동", "동천동"],
+};
+const GWANGJU_DISTRICTS = Object.keys(GWANGJU_DONGS_BY_DISTRICT);
 
 const MSG = {
   pendingListFail: "승인 대기 목록 조회 실패",
@@ -24,15 +31,30 @@ const MSG = {
 
 function normalizeRegions(value) {
   const list = Array.isArray(value) ? value : String(value || "").split(",");
-  return list
-    .map((item) => String(item || "").trim())
-    .filter((item) => GWANGJU_REGIONS.includes(item));
+  return Array.from(new Set(
+    list
+      .map((item) => String(item || "").trim())
+      .filter((item) => item.length > 0 && item.length <= 30)
+      .filter((item) => /^[\uAC00-\uD7A30-9\s\u00B7.-]+$/.test(item))
+  ));
+}
+
+function extractDistrict(value) {
+  const text = String(value || "");
+  return GWANGJU_DISTRICTS.find((district) => text.includes(district)) || "";
+}
+
+function fetchDongsByDistrict(district) {
+  const normalizedDistrict = extractDistrict(district);
+  if (!normalizedDistrict) return [];
+  return [...(GWANGJU_DONGS_BY_DISTRICT[normalizedDistrict] || [])];
 }
 
 function ensureAdminColumns(callback) {
   const alters = [
     "ALTER TABLE t_manager ADD COLUMN mgr_org VARCHAR(100) NULL",
     "ALTER TABLE t_manager ADD COLUMN assigned_regions VARCHAR(255) NULL",
+    "ALTER TABLE t_manager MODIFY COLUMN assigned_regions VARCHAR(1000) NULL",
     "ALTER TABLE t_manager ADD COLUMN approval_status VARCHAR(20) NULL",
     "ALTER TABLE t_manager ADD COLUMN rejected_at DATETIME NULL",
   ];
@@ -77,6 +99,21 @@ function getManagerById(mgrId, callback) {
     });
   });
 }
+
+router.get("/regions/dongs", requireOperator, async (req, res) => {
+  const district = extractDistrict(req.query.district || req.query.org);
+  if (!district) {
+    return res.status(400).json({ success: false, message: "\uAD11\uC8FC\uAD11\uC5ED\uC2DC \uAD6C \uC815\uBCF4\uB97C \uD655\uC778\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", dongs: [] });
+  }
+
+  try {
+    const dongs = await fetchDongsByDistrict(district);
+    res.json({ success: true, district, dongs });
+  } catch (error) {
+    console.error("\uB3D9 \uBAA9\uB85D \uC870\uD68C \uC2E4\uD328:", error.message);
+    res.status(500).json({ success: false, message: error.message, district, dongs: [] });
+  }
+});
 
 router.get("/managers", requireOperator, (req, res) => {
   ensureAdminColumns((columnErr) => {

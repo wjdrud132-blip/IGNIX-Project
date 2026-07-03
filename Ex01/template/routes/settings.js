@@ -45,6 +45,11 @@ async function ensureManagerColumns() {
   } catch (err) {
     if (err.code !== "ER_DUP_FIELDNAME") throw err;
   }
+  try {
+    await query("ALTER TABLE t_manager ADD COLUMN assigned_regions VARCHAR(1000) NULL");
+  } catch (err) {
+    if (err.code !== "ER_DUP_FIELDNAME") throw err;
+  }
 }
 
 function toClient(row) {
@@ -137,13 +142,13 @@ router.get("/", requireLogin, async (req, res) => {
 
       const rows = managerId
         ? await query(
-            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
+            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
              FROM t_manager
              WHERE mgr_id = ?`,
             [managerId]
           )
         : await query(
-            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
+            `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
              FROM t_manager
              WHERE mgr_email = ?`,
             [managerEmail]
@@ -283,7 +288,7 @@ router.get("/api/profile", requireLogin, async (req, res) => {
   try {
     await ensureManagerColumns();
     const rows = await query(
-      `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, is_approved, role
+      `SELECT mgr_id, mgr_email, mgr_name, mgr_phone, mgr_org, assigned_regions, is_approved, role
        FROM t_manager
        WHERE mgr_id = ?`,
       [req.session.user.user_id || req.session.user.mgr_id]
@@ -321,7 +326,7 @@ router.post("/api/profile", requireLogin, async (req, res) => {
 
   try {
     await ensureManagerColumns();
-    const rows = await query("SELECT mgr_email, mgr_org, role FROM t_manager WHERE mgr_id = ?", [userId]);
+    const rows = await query("SELECT mgr_email, mgr_org, assigned_regions, role FROM t_manager WHERE mgr_id = ?", [userId]);
     if (!rows.length) {
       return res.status(404).json({ success: false, message: "계정 정보를 찾을 수 없습니다." });
     }
@@ -345,6 +350,7 @@ router.post("/api/profile", requireLogin, async (req, res) => {
         mgr_org: rows[0].role === "operator" ? "광주광역시 동구청" : rows[0].mgr_org,
         mgr_email: rows[0].mgr_email,
         mgr_phone: phone,
+        assigned_regions: rows[0].assigned_regions || "",
       },
     });
   } catch (err) {
