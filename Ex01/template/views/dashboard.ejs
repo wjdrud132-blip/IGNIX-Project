@@ -332,10 +332,11 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
 
     function setNowText() {
       const now = new Date();
+      const week = ["일", "월", "화", "수", "목", "금", "토"][now.getDay()];
       document.getElementById("nowText").textContent =
         now.getFullYear() + "." +
         String(now.getMonth() + 1).padStart(2, "0") + "." +
-        String(now.getDate()).padStart(2, "0") + " " +
+        String(now.getDate()).padStart(2, "0") + " (" + week + ") " +
         String(now.getHours()).padStart(2, "0") + ":" +
         String(now.getMinutes()).padStart(2, "0") + ":" +
         String(now.getSeconds()).padStart(2, "0");
@@ -704,6 +705,7 @@ const FIDS_ALERT_READ_KEY="fids_alerts_read_all";function fidsApplyAlertReadStat
 </script>
 </body>
 </html>
+
 
 
 

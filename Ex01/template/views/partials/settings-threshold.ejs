@@ -1,11 +1,32 @@
 ﻿<div class="panel" id="section-threshold">
-          <div class="panel-header"><div class="panel-icon red"><i class="ti ti-flame"></i></div><div style="flex:1;"><div class="panel-title">화재 감지 임계값</div><div class="panel-sub">센서 경보 발생 기준 온도와 연기 감지값을 설정하고, 불꽃 감지 상태값 기준을 확인합니다.</div></div><span class="badge" id="roleBadge"><i class="ti ti-lock"></i>권한 확인 중</span></div>
-          <div class="row"><div class="row-left"><div class="row-label">위험 온도 임계값</div><div class="row-sub">이 온도 이상이면 즉시 화재 위험 경보가 발생합니다.</div></div><div class="row-right"><input id="dangerTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1"><span style="font-size:13px;color:#888;">°C</span></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">주의 온도 임계값</div><div class="row-sub">이 온도 이상이면 주의 경보가 발생합니다.</div></div><div class="row-right"><input id="warningTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1"><span style="font-size:13px;color:#888;">°C</span></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">위험 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 즉시 화재 위험 경보가 발생합니다.</div></div><div class="row-right"><input id="dangerSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1"><span style="font-size:13px;color:#888;">ppm</span></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">주의 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 주의 경보가 발생합니다.</div></div><div class="row-right"><input id="warningSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1"><span style="font-size:13px;color:#888;">ppm</span></div></div>
-          <div class="row"><div class="row-left"><div class="row-label">불꽃 감지 상태값</div><div class="row-sub">불꽃 센서는 임계값이 아니라 0/1 상태로 판단합니다.</div></div><div class="row-right"><span class="badge danger">1 = 불꽃 발생</span><span class="badge ok">0 = 불꽃 없음</span></div></div>
-                    <div class="row" id="aiJudgeRow"><div class="row-left"><div class="row-label">AI 위험 판단 사용</div><div class="row-sub">센서값과 임계값을 함께 분석해서 위험/주의/정상 상태를 보정합니다.</div></div><div class="row-right"><div id="aiJudgeControl" class="toggle-wrap"><div id="aiJudgeToggle" class="toggle on" onclick="toggleSwitch('aiJudgeToggle','aiJudgeLabel')"><div class="toggle-dot"></div></div><span id="aiJudgeLabel" class="toggle-label">활성</span></div><div id="aiJudgeReadonly" style="display:none;align-items:center;gap:8px;"><span id="aiJudgeToggleReadonlyLabel" class="badge ok">활성</span><span style="font-size:12px;color:#9aa3b2;">운영자가 설정한 값입니다.</span></div></div></div>
-          <div class="info-box" id="permissionBox"><i class="ti ti-info-circle"></i><div id="permissionText">권한을 확인하는 중입니다.</div></div>
-          <div class="save-bar" id="operatorActions"><button class="btn" type="button" onclick="resetThresholds()"><i class="ti ti-rotate-clockwise"></i>초기화</button><button class="btn blue" type="button" onclick="saveThresholds()"><i class="ti ti-device-floppy"></i>저장</button></div>
-        </div>
+  <div class="panel-header">
+    <div class="panel-icon red"><i class="ti ti-flame"></i></div>
+    <div style="flex:1;">
+      <div class="panel-title">화재 감지 임계값</div>
+      <div class="panel-sub">AI 위험 판단에 참고되는 기준값입니다. 현재는 모든 계정에서 조회만 가능합니다.</div>
+    </div>
+    <span class="badge lock" id="roleBadge"><i class="ti ti-lock"></i>읽기 전용</span>
+  </div>
+
+  <div class="row">
+    <div class="row-left"><div class="row-label">위험 온도 임계값</div><div class="row-sub">이 온도 이상이면 AI 판단에서 위험 가능성을 높게 반영합니다.</div></div>
+    <div class="row-right"><input id="dangerTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1" disabled><span style="font-size:13px;color:#888;">°C</span></div>
+  </div>
+  <div class="row">
+    <div class="row-left"><div class="row-label">주의 온도 임계값</div><div class="row-sub">이 온도 이상이면 AI 판단에서 주의 가능성을 반영합니다.</div></div>
+    <div class="row-right"><input id="warningTemp" class="input-field threshold-input" style="width:90px;" type="number" step="0.1" disabled><span style="font-size:13px;color:#888;">°C</span></div>
+  </div>
+  <div class="row">
+    <div class="row-left"><div class="row-label">위험 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 AI 판단에서 위험 가능성을 높게 반영합니다.</div></div>
+    <div class="row-right"><input id="dangerSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1" disabled><span style="font-size:13px;color:#888;">ppm</span></div>
+  </div>
+  <div class="row">
+    <div class="row-left"><div class="row-label">주의 연기 감지값 임계값</div><div class="row-sub">이 수치 이상이면 AI 판단에서 주의 가능성을 반영합니다.</div></div>
+    <div class="row-right"><input id="warningSmoke" class="input-field threshold-input" style="width:90px;" type="number" step="1" disabled><span style="font-size:13px;color:#888;">ppm</span></div>
+  </div>
+  <div class="row">
+    <div class="row-left"><div class="row-label">불꽃 감지 상태값</div><div class="row-sub">불꽃 센서는 임계값이 아니라 0/1 상태로 판단합니다.</div></div>
+    <div class="row-right"><span class="badge danger">1 = 불꽃 발생</span><span class="badge ok">0 = 불꽃 없음</span></div>
+  </div>
+  <div class="info-box readonly-note" id="permissionBox"><i class="ti ti-info-circle"></i><div id="permissionText">AI 위험 판단은 항상 활성화되어 있으며, 임계값은 조회만 가능합니다.</div></div>
+</div>

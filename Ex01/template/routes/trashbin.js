@@ -11,6 +11,7 @@ function displayBinId(binId) {
 
 const SENSOR_ONLINE_LIMIT_MS = 10000;
 const pendingAlertKeys = new Set();
+const SAME_ALERT_COOLDOWN_MINUTES = 2;
 
 function getSensorAgeMs(sensorCreatedAt) {
   if (!sensorCreatedAt) return null;
@@ -200,6 +201,8 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
 
     const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
     if (previousStatus === row.alert_type) return;
+
+    if (await hasRecentSameAlert(row)) return;
 
     await queryAsync(
       `INSERT INTO t_alert
@@ -551,6 +554,9 @@ router.get("/sensor-history", (req, res) => {
 });
 
 module.exports = router;
+
+
+
 
 
 

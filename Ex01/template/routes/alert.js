@@ -3,7 +3,7 @@ const router = express.Router();
 
 const conn = require("../config/db");
 const { filterRowsByRegion, dedupeRowsByLocation, buildLocationWhere } = require("../utils/regionScope");
-const { judgeDanger, defaultThresholds } = require("../utils/aiJudge");
+const { judgeDanger, defaultThresholds, trainSensorModel } = require("../utils/aiJudge");
 
 function displayBinId(binId) {
   return binId;
@@ -41,6 +41,58 @@ async function getAiEnabled() {
     return rows && rows[0] ? rows[0].setting_value !== "N" : true;
   } catch (err) {
     return true;
+  }
+}
+
+let cachedSensorModel = null;
+let cachedSensorModelAt = 0;
+const SENSOR_MODEL_CACHE_MS = 300000;
+
+async function getSensorModel(thresholds) {
+  const now = Date.now();
+  if (cachedSensorModel && now - cachedSensorModelAt < SENSOR_MODEL_CACHE_MS) {
+    return cachedSensorModel;
+  }
+
+  try {
+    const rows = await query(`
+      SELECT
+        bin_id,
+        temp,
+        gas,
+        flame,
+        fire_risk,
+        CASE
+          WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+          ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+        END AS temp_change,
+        CASE
+          WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+          ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+        END AS gas_change
+      FROM (
+        SELECT
+          s.*,
+          LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
+          LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
+          LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
+        FROM (
+          SELECT *
+          FROM t_sensor
+          WHERE temp IS NOT NULL
+            AND gas IS NOT NULL
+          ORDER BY created_at DESC, sensor_id DESC
+          LIMIT 5000
+        ) s
+      ) sensor_changes
+    `);
+
+    cachedSensorModel = trainSensorModel(rows, thresholds);
+    cachedSensorModelAt = now;
+    return cachedSensorModel;
+  } catch (err) {
+    console.error("AI 학습 데이터 조회 실패:", err);
+    return { available: false, sampleCount: 0 };
   }
 }
 
@@ -142,31 +194,76 @@ router.get("/daily-records", async (req, res) => {
   try {
     const sql = `
       SELECT
-        a.alert_id,
+        s.sensor_id AS alert_id,
         b.bin_id,
         b.bin_id AS display_bin_id,
         b.bin_loc,
         b.installed_at,
         b.network_status,
-        NULL AS sensor_id,
-        NULL AS temp_value,
-        NULL AS smoke_value,
-        NULL AS flame_value,
-        a.alerted_at,
-        DATE_FORMAT(a.alerted_at, '%Y-%m-%d') AS record_date,
-        a.alert_type AS saved_alert_type,
-        COALESCE(a.alert_msg, '') AS alert_msg,
-        a.is_received,
-        a.received_at
-      FROM t_alert a
-      INNER JOIN t_trashbin b ON b.bin_id = a.bin_id
+        s.sensor_id,
+        s.temp AS temp_value,
+        s.gas AS smoke_value,
+        s.flame AS flame_value,
+        s.fire_risk,
+        s.temp_change,
+        s.gas_change,
+        s.created_at AS alerted_at,
+        DATE_FORMAT(s.created_at, '%Y-%m-%d') AS record_date,
+        CASE
+          WHEN s.fire_risk = 2 THEN 'danger'
+          WHEN s.fire_risk = 1 THEN 'warning'
+          ELSE 'normal'
+        END AS saved_alert_type,
+        '' AS alert_msg,
+        'N' AS is_received,
+        NULL AS received_at
+      FROM (
+        SELECT
+          sensor_changes.*,
+          CASE
+            WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+            ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+          END AS temp_change,
+          CASE
+            WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
+            ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
+          END AS gas_change
+        FROM (
+          SELECT
+            s.*,
+            LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
+            LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
+            LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
+          FROM t_sensor s
+          WHERE s.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+        ) sensor_changes
+      ) s
+      INNER JOIN t_trashbin b ON b.bin_id = s.bin_id
       WHERE IFNULL(b.network_status, 1) <> 9
-        AND a.alert_type IN ('danger', 'warning')
-      ORDER BY a.alerted_at DESC, a.alert_id DESC
-      LIMIT 500
+      ORDER BY s.created_at DESC, s.sensor_id DESC
+      LIMIT 10000
     `;
 
-    const scopedRows = filterRowsByRegion(req, await query(sql), "bin_loc");
+    const thresholds = await getThresholds();
+    const aiEnabled = await getAiEnabled();
+    const sensorModel = aiEnabled ? await getSensorModel(thresholds) : null;
+    const scopedRows = filterRowsByRegion(req, await query(sql), "bin_loc").map((row) => {
+      const ai = judgeDanger({
+        ...row,
+        alert_type: row.saved_alert_type,
+        alert_msg: row.alert_msg || "",
+      }, thresholds, aiEnabled, sensorModel);
+
+      return {
+        ...row,
+        saved_alert_type: ai.status,
+        temp_value: ai.sensor.temp,
+        smoke_value: ai.sensor.smoke,
+        flame_value: ai.sensor.flame,
+        ai_enabled: aiEnabled ? "Y" : "N",
+      };
+    });
+
     const bestByBinDate = new Map();
     const severityRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
 
@@ -186,10 +283,6 @@ router.get("/daily-records", async (req, res) => {
         ...row,
         alert_type: row.saved_alert_type,
         display_bin_id: displayBinId(row.bin_id),
-        temp_value: null,
-        smoke_value: null,
-        flame_value: null,
-        ai_enabled: "N",
       }));
 
     res.json(rows);
@@ -224,6 +317,8 @@ router.post("/read-all", async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
 
