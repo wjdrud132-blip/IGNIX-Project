@@ -36,6 +36,10 @@ function parseSensorValues(row) {
     temp: firstNumber(row && row.temp_value, row && row.temp, row && row.temperature, tempMatch && tempMatch[1]),
     smoke: firstNumber(row && row.smoke_value, row && row.gas, row && row.smoke, smokeMatch && smokeMatch[1]),
     flame: firstNumber(row && row.flame_value, row && row.flame, flameText === "O" ? 1 : flameText === "X" ? 0 : flameText),
+    irCount: firstNumber(row && row.ir_count, row && row.irCount, row && row.flame_channel_count, row && row.ir_channel_count),
+    prevTemp: firstNumber(row && row.prev_temp, row && row.prev_temp_value, row && row.prevTemperature),
+    prevSmoke: firstNumber(row && row.prev_gas, row && row.prev_smoke_value, row && row.prevSmoke),
+    prevIrCount: firstNumber(row && row.prev_ir_count, row && row.prevIrCount, row && row.prev_flame_channel_count),
   };
 }
 
@@ -85,6 +89,47 @@ function positiveChangeThreshold(values, fallback) {
   return isNumber(p90) && p90 > 0 ? p90 : fallback;
 }
 
+function irContext(sensor) {
+  const irCount = sensor.irCount;
+  const prevIrCount = sensor.prevIrCount;
+  const hasIrCount = isNumber(irCount);
+  const hasPrevIrCount = isNumber(prevIrCount);
+  return {
+    sunlightLike: hasIrCount && irCount >= 4 && (!hasPrevIrCount || prevIrCount >= 4),
+    shadeStable: hasIrCount && irCount === 0 && (!hasPrevIrCount || prevIrCount === 0),
+  };
+}
+
+function sensorValuesFalling(sensor) {
+  return {
+    tempFalling: isNumber(sensor.temp) && isNumber(sensor.prevTemp) && sensor.temp < sensor.prevTemp,
+    smokeFalling: isNumber(sensor.smoke) && isNumber(sensor.prevSmoke) && sensor.smoke < sensor.prevSmoke,
+  };
+}
+
+function applyCoolingAdjustment(scores, reasons, sensor, dangerTemp, dangerSmoke) {
+  const falling = sensorValuesFalling(sensor);
+  if (!falling.tempFalling || !falling.smokeFalling) return scores;
+
+  reasons.push("온도와 연기값이 이전 수신값보다 함께 감소해 화재가 약해지는 흐름을 반영했습니다.");
+
+  const stillDanger =
+    (isNumber(sensor.temp) && sensor.temp >= dangerTemp) ||
+    (isNumber(sensor.smoke) && sensor.smoke >= dangerSmoke);
+
+  if (stillDanger) {
+    return {
+      dangerScore: Math.max(0, scores.dangerScore - 1),
+      warningScore: scores.warningScore + 1,
+    };
+  }
+
+  return {
+    dangerScore: Math.max(0, scores.dangerScore - 2),
+    warningScore: Math.max(0, scores.warningScore - 1),
+  };
+}
+
 function trainSensorModel(rows = [], thresholds = defaultThresholds) {
   const samples = rows
     .map((row) => ({
@@ -92,6 +137,7 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
       temp: toNumber(row.temp),
       smoke: toNumber(row.gas ?? row.smoke),
       flame: toNumber(row.flame),
+      ir_count: toNumber(row.ir_count),
       gas_change: toNumber(row.gas_change),
       temp_change: toNumber(row.temp_change),
       risk: row.fire_risk === null || row.fire_risk === undefined || row.fire_risk === "" ? null : normalizeRisk(row.fire_risk),
@@ -188,8 +234,10 @@ function judgeWithModel(row, sensor, model) {
   const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && model.gasChangeP90 > 0 && gasChange >= model.gasChangeP90;
   const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && model.tempChangeP90 > 0 && tempChange >= model.tempChangeP90;
   const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
+  const ir = irContext(sensor);
 
-  const flameIsUseful = flame === 1 && (
+  const flameIsUseful = flame === 1 && !ir.sunlightLike && (
+    ir.shadeStable ||
     smokeWarningLike ||
     (isNumber(temp) && temp >= adaptiveDangerTemp && isNumber(smoke) && smoke >= adaptiveWarningSmoke * 0.8) ||
     gasChangeHigh ||
@@ -232,11 +280,19 @@ function judgeWithModel(row, sensor, model) {
   }
 
   if (flameIsUseful) {
-    dangerScore += 2;
-    reasons.push("불꽃 감지는 연기값 또는 온도 상승이 동반되어 위험 판단에 반영했습니다.");
+    dangerScore += ir.shadeStable ? 3 : 2;
+    reasons.push(ir.shadeStable ? "IR 감지 개수가 0으로 유지되어 불꽃 감지를 더 중요한 위험 근거로 반영했습니다." : "불꽃 감지는 연기값 또는 온도 상승이 동반되어 위험 판단에 반영했습니다.");
   } else if (flame === 1) {
-    reasons.push("불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
+    reasons.push(ir.sunlightLike ? "IR 다채널 감지가 지속되어 햇빛 가능성을 고려하고 불꽃 단독 가중치를 낮췄습니다." : "불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
   }
+
+  ({ dangerScore, warningScore } = applyCoolingAdjustment(
+    { dangerScore, warningScore },
+    reasons,
+    sensor,
+    adaptiveDangerTemp,
+    adaptiveDangerSmoke
+  ));
 
   let status = "normal";
   if (dangerScore >= 3) status = "danger";
@@ -278,17 +334,19 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model 
   const reasons = [];
   let dangerScore = 0;
   let warningScore = 0;
+  const ir = irContext(sensor);
 
-  const flameUsable = sensor.flame === 1 && (
+  const flameUsable = sensor.flame === 1 && !ir.sunlightLike && (
+    ir.shadeStable ||
     (isNumber(sensor.smoke) && sensor.smoke >= thresholds.warningSmoke) ||
     (isNumber(sensor.temp) && sensor.temp >= thresholds.warningTemp)
   );
 
   if (flameUsable) {
     dangerScore += 4;
-    reasons.push("불꽃이 감지되고 연기값 또는 온도 상승이 동반되어 위험으로 판단했습니다.");
+    reasons.push(ir.shadeStable ? "IR 감지 개수가 0으로 유지되어 불꽃 감지를 중요한 위험 근거로 반영했습니다." : "불꽃이 감지되고 연기값 또는 온도 상승이 동반되어 위험으로 판단했습니다.");
   } else if (sensor.flame === 1) {
-    reasons.push("불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
+    reasons.push(ir.sunlightLike ? "IR 다채널 감지가 지속되어 햇빛 가능성을 고려하고 불꽃 단독 가중치를 낮췄습니다." : "불꽃 감지가 있었지만 연기값/온도 상승이 약해 단독 위험 근거로는 사용하지 않았습니다.");
   }
 
   if (isNumber(sensor.smoke)) {
@@ -320,6 +378,14 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model 
     warningScore += 1;
     reasons.push("온도와 연기값이 동시에 상승해 위험 가능성이 있습니다.");
   }
+
+  ({ dangerScore, warningScore } = applyCoolingAdjustment(
+    { dangerScore, warningScore },
+    reasons,
+    sensor,
+    thresholds.dangerTemp,
+    thresholds.dangerSmoke
+  ));
 
   let status = "normal";
   if (dangerScore >= 3) status = "danger";
