@@ -40,6 +40,7 @@ function getSensorModel(thresholds, callback) {
       temp,
       gas,
       flame,
+      ir_count,
       fire_risk,
       CASE
         WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
@@ -54,6 +55,7 @@ function getSensorModel(thresholds, callback) {
         s.*,
         LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
         LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
+        LAG(s.ir_count) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_ir_count,
         LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
       FROM (
         SELECT *
@@ -98,6 +100,8 @@ function rowForCurrentSensor(row) {
     temp_value: null,
     smoke_value: null,
     flame_value: null,
+    ir_count: null,
+    prev_ir_count: null,
     fire_risk: null,
   };
 }
@@ -134,6 +138,7 @@ async function getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel) 
        temp AS temp_value,
        gas AS smoke_value,
        flame AS flame_value,
+       ir_count,
        fire_risk,
        created_at AS sensor_created_at
      FROM t_sensor
@@ -267,10 +272,12 @@ router.get("/list", (req, res) => {
       s.temp AS temp_value,
       s.gas AS smoke_value,
       s.flame AS flame_value,
+      s.ir_count,
       s.fire_risk,
       s.created_at AS sensor_created_at,
       s.prev_temp,
       s.prev_gas,
+      s.prev_ir_count,
       s.prev_created_at,
       CASE
         WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
@@ -288,6 +295,7 @@ router.get("/list", (req, res) => {
         latest.*,
         prev.temp AS prev_temp,
         prev.gas AS prev_gas,
+        prev.ir_count AS prev_ir_count,
         prev.created_at AS prev_created_at
       FROM t_sensor latest
       LEFT JOIN t_sensor prev
@@ -529,6 +537,7 @@ router.get("/sensor-history", (req, res) => {
         s.temp,
         s.gas,
         s.flame,
+        s.ir_count,
         s.fire_risk,
         s.created_at
       FROM t_sensor s
