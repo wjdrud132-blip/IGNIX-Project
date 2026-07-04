@@ -1,8 +1,8 @@
-const defaultThresholds = Object.freeze({
+﻿const defaultThresholds = Object.freeze({
   dangerTemp: 60,
   warningTemp: 40,
   dangerSmoke: 230,
-  warningSmoke: 120,
+  warningSmoke: 150,
 });
 
 function originalStatus(row) {
@@ -347,6 +347,7 @@ module.exports = {
   parseSensorValues,
   trainSensorModel,
 };
+
 
 
 

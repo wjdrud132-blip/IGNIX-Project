@@ -141,62 +141,56 @@ router.get("/list", async (req, res) => {
 router.get("/daily-records", async (req, res) => {
   try {
     const sql = `
-      SELECT *
-      FROM (
-        SELECT
-          CONCAT('sensor-', s.sensor_id) AS alert_id,
-          b.bin_id,
-          b.bin_loc,
-          b.installed_at,
-          b.network_status,
-          s.sensor_id,
-          s.temp AS temp_value,
-          s.gas AS smoke_value,
-          s.flame AS flame_value,
-          s.fire_risk,
-          s.created_at AS alerted_at,
-          DATE_FORMAT(s.created_at, '%Y-%m-%d') AS record_date,
-          CASE
-            WHEN s.fire_risk = 2 THEN 'danger'
-            WHEN s.fire_risk = 1 THEN 'warning'
-            ELSE 'normal'
-          END AS rule_status,
-          ROW_NUMBER() OVER (
-            PARTITION BY s.bin_id, DATE(s.created_at)
-            ORDER BY s.created_at DESC, s.sensor_id DESC
-          ) AS record_rank
-        FROM t_sensor s
-        INNER JOIN t_trashbin b ON b.bin_id = s.bin_id
-        WHERE IFNULL(b.network_status, 1) <> 9
-      ) latest
-      WHERE record_rank = 1
-      ORDER BY alerted_at DESC, bin_id ASC
+      SELECT
+        a.alert_id,
+        b.bin_id,
+        b.bin_id AS display_bin_id,
+        b.bin_loc,
+        b.installed_at,
+        b.network_status,
+        NULL AS sensor_id,
+        NULL AS temp_value,
+        NULL AS smoke_value,
+        NULL AS flame_value,
+        a.alerted_at,
+        DATE_FORMAT(a.alerted_at, '%Y-%m-%d') AS record_date,
+        a.alert_type AS saved_alert_type,
+        COALESCE(a.alert_msg, '') AS alert_msg,
+        a.is_received,
+        a.received_at
+      FROM t_alert a
+      INNER JOIN t_trashbin b ON b.bin_id = a.bin_id
+      WHERE IFNULL(b.network_status, 1) <> 9
+        AND a.alert_type IN ('danger', 'warning')
+      ORDER BY a.alerted_at DESC, a.alert_id DESC
       LIMIT 500
     `;
 
-    const thresholds = await getThresholds();
-    const aiEnabled = await getAiEnabled();
     const scopedRows = filterRowsByRegion(req, await query(sql), "bin_loc");
+    const bestByBinDate = new Map();
+    const severityRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
 
-    const rows = scopedRows.map((row) => {
-      const ai = judgeDanger({
-        ...row,
-        alert_type: row.rule_status,
-        alert_msg: "",
-      }, thresholds, aiEnabled);
-
-      return {
-        ...row,
-        display_bin_id: displayBinId(row.bin_id),
-        alert_type: ai.status,
-        ai_enabled: aiEnabled ? "Y" : "N",
-        temp_value: ai.sensor.temp,
-        smoke_value: ai.sensor.smoke,
-        flame_value: ai.sensor.flame,
-        alert_msg: `온도 ${ai.sensor.temp ?? "-"} / 연기 감지값 ${ai.sensor.smoke ?? "-"} / 불꽃 감지 ${Number(ai.sensor.flame) === 1 ? "O" : "X"}`,
-        is_received: "Y",
-      };
+    scopedRows.forEach((row) => {
+      const key = `${row.bin_id}-${row.record_date}`;
+      const old = bestByBinDate.get(key);
+      const rowRank = severityRank(row.saved_alert_type);
+      const oldRank = old ? severityRank(old.saved_alert_type) : 99;
+      if (!old || rowRank < oldRank || (rowRank === oldRank && new Date(row.alerted_at) > new Date(old.alerted_at))) {
+        bestByBinDate.set(key, row);
+      }
     });
+
+    const rows = Array.from(bestByBinDate.values())
+      .sort((a, b) => new Date(b.alerted_at) - new Date(a.alerted_at) || Number(a.bin_id) - Number(b.bin_id))
+      .map((row) => ({
+        ...row,
+        alert_type: row.saved_alert_type,
+        display_bin_id: displayBinId(row.bin_id),
+        temp_value: null,
+        smoke_value: null,
+        flame_value: null,
+        ai_enabled: "N",
+      }));
 
     res.json(rows);
   } catch (err) {
@@ -204,7 +198,6 @@ router.get("/daily-records", async (req, res) => {
     res.status(500).json({ message: "날짜별 센서 기록 조회 실패" });
   }
 });
-
 router.post("/read-all", async (req, res) => {
   try {
     const scope = buildLocationWhere(req, "b.bin_loc");
@@ -212,12 +205,9 @@ router.post("/read-all", async (req, res) => {
       UPDATE t_alert a
       LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
       SET
-        a.received_at = CASE
-          WHEN a.received_at IS NOT NULL THEN a.received_at
-          ELSE NOW()
-        END,
+        a.received_at = COALESCE(a.received_at, NOW()),
         a.is_received = 'Y'
-      WHERE a.is_received <> 'Y'
+      WHERE (a.is_received <> 'Y' OR a.received_at IS NULL)
         AND a.alert_type <> 'normal'
         AND (b.network_status IS NULL OR b.network_status <> 9)
         ${scope.clause}
@@ -234,6 +224,10 @@ router.post("/read-all", async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
 
 
 

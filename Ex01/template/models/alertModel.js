@@ -1,4 +1,4 @@
-const conn = require("../config/db");
+﻿const conn = require("../config/db");
 const { filterRowsByRegion, buildLocationWhere } = require("../utils/regionScope");
 
 function query(sql, params = []) {
@@ -37,7 +37,8 @@ async function getLogs(req) {
         SELECT s2.sensor_id
         FROM t_sensor s2
         WHERE s2.bin_id = a.bin_id
-        ORDER BY ABS(TIMESTAMPDIFF(SECOND, s2.created_at, a.alerted_at)) ASC, s2.sensor_id DESC
+        AND s2.created_at <= a.alerted_at
+        ORDER BY s2.created_at DESC, s2.sensor_id DESC
         LIMIT 1
       )
     WHERE (b.network_status IS NULL OR b.network_status <> 9)
@@ -74,12 +75,10 @@ async function markAllRead(req) {
     UPDATE t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
     SET
-      a.received_at = CASE
-        WHEN a.received_at IS NOT NULL THEN a.received_at
-        ELSE NOW()
-      END,
+      a.received_at = COALESCE(a.received_at, NOW()),
       a.is_received = 'Y'
-    WHERE a.is_received <> 'Y'
+    WHERE (a.is_received <> 'Y' OR a.received_at IS NULL)
+      AND a.alert_type <> 'normal'
       AND (b.network_status IS NULL OR b.network_status <> 9)
       ${scope.clause}
   `;
@@ -101,13 +100,11 @@ async function markSelectedRead(req, alertIds) {
     UPDATE t_alert a
     LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
     SET
-      a.received_at = CASE
-        WHEN a.received_at IS NOT NULL THEN a.received_at
-        ELSE NOW()
-      END,
+      a.received_at = COALESCE(a.received_at, NOW()),
       a.is_received = 'Y'
     WHERE a.alert_id IN (${placeholders})
-      AND a.is_received <> 'Y'
+      AND (a.is_received <> 'Y' OR a.received_at IS NULL)
+      AND a.alert_type <> 'normal'
       AND (b.network_status IS NULL OR b.network_status <> 9)
       ${scope.clause}
   `;
@@ -141,6 +138,10 @@ module.exports = {
   markSelectedRead,
   deleteSelected
 };
+
+
+
+
 
 
 

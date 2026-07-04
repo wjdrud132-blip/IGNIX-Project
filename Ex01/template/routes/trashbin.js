@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
@@ -26,7 +26,7 @@ function isSensorOnline(sensorCreatedAt) {
 
 let cachedSensorModel = null;
 let cachedSensorModelAt = 0;
-const SENSOR_MODEL_CACHE_MS = 60000;
+const SENSOR_MODEL_CACHE_MS = 300000;
 
 function getSensorModel(thresholds, callback) {
   const now = Date.now();
@@ -55,16 +55,21 @@ function getSensorModel(thresholds, callback) {
         LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
         LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
         LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
-      FROM t_sensor s
-      WHERE s.temp IS NOT NULL
-        AND s.gas IS NOT NULL
+      FROM (
+        SELECT *
+        FROM t_sensor
+        WHERE temp IS NOT NULL
+          AND gas IS NOT NULL
+        ORDER BY created_at DESC, sensor_id DESC
+        LIMIT 5000
+      ) s
     ) sensor_changes
   `;
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("t_sensor AI 학습 데이터 조회 실패:", err);
-      return callback(null, { available: false, sampleCount: 0, reason: "t_sensor 학습 데이터를 불러오지 못해 기존 임계값 기준을 사용합니다." });
+      console.error("t_sensor AI ?숈뒿 ?곗씠??議고쉶 ?ㅽ뙣:", err);
+      return callback(null, { available: false, sampleCount: 0, reason: "t_sensor ?숈뒿 ?곗씠?곕? 遺덈윭?ㅼ? 紐삵빐 湲곗〈 ?꾧퀎媛?湲곗????ъ슜?⑸땲??" });
     }
 
     cachedSensorModel = trainSensorModel(rows, thresholds);
@@ -107,8 +112,8 @@ function queryAsync(sql, params = []) {
 }
 
 function alertMessageFor(row) {
-  if (row.alert_type === "danger") return "화재 위험 감지 - 즉각 대응 필요";
-  if (row.alert_type === "warning") return "온도 및 연기 임계값 초과";
+  if (row.alert_type === "danger") return "?붿옱 ?꾪뿕 媛먯? - 利됯컖 ????꾩슂";
+  if (row.alert_type === "warning") return "?⑤룄 諛??곌린 ?꾧퀎媛?珥덇낵";
   return "";
 }
 
@@ -193,13 +198,8 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
 
     if (exists.length) return;
 
-    const latestSavedStatus = await getLatestSavedAlertStatus(row);
-    if (latestSavedStatus) {
-      if (latestSavedStatus === row.alert_type) return;
-    } else {
-      const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
-      if (previousStatus === row.alert_type) return;
-    }
+    const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
+    if (previousStatus === row.alert_type) return;
 
     await queryAsync(
       `INSERT INTO t_alert
@@ -237,7 +237,7 @@ async function saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel) 
     try {
       await saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel);
     } catch (err) {
-      console.error("센서 알림 기록 저장 실패:", err);
+      console.error("?쇱꽌 ?뚮┝ 湲곕줉 ????ㅽ뙣:", err);
     }
   }
 }
@@ -284,17 +284,31 @@ router.get("/list", (req, res) => {
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
     LEFT JOIN (
-      SELECT *
-      FROM (
-        SELECT
-          s1.*,
-          LAG(s1.temp) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_temp,
-          LAG(s1.gas) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_gas,
-          LAG(s1.created_at) OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at, s1.sensor_id) AS prev_created_at,
-          ROW_NUMBER() OVER (PARTITION BY s1.bin_id ORDER BY s1.created_at DESC, s1.sensor_id DESC) AS recent_rank
-        FROM t_sensor s1
-      ) latest_sensor
-      WHERE latest_sensor.recent_rank = 1
+      SELECT
+        latest.*,
+        prev.temp AS prev_temp,
+        prev.gas AS prev_gas,
+        prev.created_at AS prev_created_at
+      FROM t_sensor latest
+      LEFT JOIN t_sensor prev
+        ON prev.sensor_id = (
+          SELECT p.sensor_id
+          FROM t_sensor p
+          WHERE p.bin_id = latest.bin_id
+            AND (
+              p.created_at < latest.created_at
+              OR (p.created_at = latest.created_at AND p.sensor_id < latest.sensor_id)
+            )
+          ORDER BY p.created_at DESC, p.sensor_id DESC
+          LIMIT 1
+        )
+      WHERE latest.sensor_id = (
+        SELECT s2.sensor_id
+        FROM t_sensor s2
+        WHERE s2.bin_id = latest.bin_id
+        ORDER BY s2.created_at DESC, s2.sensor_id DESC
+        LIMIT 1
+      )
     ) s
       ON s.bin_id = b.bin_id
     LEFT JOIN t_alert a
@@ -317,8 +331,8 @@ router.get("/list", (req, res) => {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("쓰레기통 목록 조회 실패:", err);
-      return res.status(500).json({ message: "쓰레기통 목록 조회 실패" });
+      console.error("?곕젅湲고넻 紐⑸줉 議고쉶 ?ㅽ뙣:", err);
+      return res.status(500).json({ message: "?곕젅湲고넻 紐⑸줉 議고쉶 ?ㅽ뙣" });
     }
 
     rows = dedupeRowsByLocation(filterRowsByRegion(req, rows, "bin_loc"), "bin_loc");
@@ -350,7 +364,7 @@ router.get("/list", (req, res) => {
               alert_type: ai.status,
               ai_enabled: aiEnabled ? "Y" : "N",
               ai_status: ai.status,
-              ai_reason: currentRow.sensor_online === "Y" ? ai.reason.join(" ") : "최근 센서 데이터 수신이 없어 오프라인으로 표시합니다.",
+              ai_reason: currentRow.sensor_online === "Y" ? ai.reason.join(" ") : "理쒓렐 ?쇱꽌 ?곗씠???섏떊???놁뼱 ?ㅽ봽?쇱씤?쇰줈 ?쒖떆?⑸땲??",
               ai_confidence: currentRow.sensor_online === "Y" ? ai.confidence : 0,
               ai_model_sample_count: sensorModel && sensorModel.sampleCount ? sensorModel.sampleCount : 0,
               temp_value: currentRow.sensor_online === "Y" ? ai.sensor.temp : null,
@@ -387,8 +401,8 @@ router.get("/trash/list", (req, res) => {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("휴지통 목록 조회 실패:", err);
-      return res.status(500).json({ message: "휴지통 목록 조회 실패" });
+      console.error("?댁???紐⑸줉 議고쉶 ?ㅽ뙣:", err);
+      return res.status(500).json({ message: "?댁???紐⑸줉 議고쉶 ?ㅽ뙣" });
     }
 
     res.json(filterRowsByRegion(req, rows, "bin_loc").map((row) => ({ ...row, display_bin_id: displayBinId(row.bin_id) })));
@@ -421,21 +435,21 @@ router.delete("/trash/:bin_id", (req, res) => {
 
   conn.query("DELETE FROM t_alert WHERE bin_id = ?", [bin_id], (alertErr) => {
     if (alertErr) {
-      console.error("휴지통 알림 완전 삭제 실패:", alertErr);
-      return res.status(500).json({ message: "알림 데이터 삭제 실패" });
+      console.error("?댁????뚮┝ ?꾩쟾 ??젣 ?ㅽ뙣:", alertErr);
+      return res.status(500).json({ message: "?뚮┝ ?곗씠????젣 ?ㅽ뙣" });
     }
 
     conn.query("DELETE FROM t_trashbin WHERE bin_id = ? AND network_status = 9", [bin_id], (err, result) => {
       if (err) {
-        console.error("휴지통 쓰레기통 완전 삭제 실패:", err);
-        return res.status(500).json({ message: "완전 삭제 실패" });
+        console.error("?댁????곕젅湲고넻 ?꾩쟾 ??젣 ?ㅽ뙣:", err);
+        return res.status(500).json({ message: "?꾩쟾 ??젣 ?ㅽ뙣" });
       }
 
       if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "휴지통에서 삭제할 쓰레기통을 찾을 수 없습니다." });
+        return res.status(404).json({ message: "?댁??듭뿉????젣???곕젅湲고넻??李얠쓣 ???놁뒿?덈떎." });
       }
 
-      res.json({ message: "DB에서 완전히 삭제되었습니다." });
+      res.json({ message: "DB?먯꽌 ?꾩쟾????젣?섏뿀?듬땲??" });
     });
   });
 });
@@ -450,11 +464,11 @@ router.post("/", (req, res) => {
   const installer_phone = String(req.body.manager_phone || req.body.installer_phone || "").trim();
 
   if (!bin_id || !Number.isInteger(bin_id) || bin_id < 1) {
-    return res.status(400).json({ message: "쓰레기통 ID를 입력해주세요." });
+    return res.status(400).json({ message: "?곕젅湲고넻 ID瑜??낅젰?댁＜?몄슂." });
   }
 
   if (!bin_loc || !installed_at || !mgr_id) {
-    return res.status(400).json({ message: "위치와 설치일을 입력하고 로그인 상태를 확인해주세요." });
+    return res.status(400).json({ message: "?꾩튂? ?ㅼ튂?쇱쓣 ?낅젰?섍퀬 濡쒓렇???곹깭瑜??뺤씤?댁＜?몄슂." });
   }
 
   const sql = `
@@ -467,15 +481,15 @@ router.post("/", (req, res) => {
   conn.query(sql, [bin_id, bin_loc, installed_at, mgr_id, network_status || 1, installer_name || null, installer_phone || null], (err) => {
     if (err) {
       if (err.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({ message: "이미 등록된 쓰레기통 ID입니다." });
+        return res.status(409).json({ message: "?대? ?깅줉???곕젅湲고넻 ID?낅땲??" });
       }
 
-      console.error("쓰레기통 등록 실패:", err);
-      return res.status(500).json({ message: "쓰레기통 등록 실패" });
+      console.error("?곕젅湲고넻 ?깅줉 ?ㅽ뙣:", err);
+      return res.status(500).json({ message: "?곕젅湲고넻 ?깅줉 ?ㅽ뙣" });
     }
 
     res.json({
-      message: "쓰레기통이 등록되었습니다.",
+      message: "?곕젅湲고넻???깅줉?섏뿀?듬땲??",
       bin_id,
     });
   });
@@ -491,19 +505,55 @@ router.delete("/:bin_id", (req, res) => {
 
   conn.query(sql, [bin_id], (err, result) => {
     if (err) {
-      console.error("쓰레기통 휴지통 이동 실패:", err);
-      return res.status(500).json({ message: "쓰레기통 휴지통 이동 실패" });
+      console.error("?곕젅湲고넻 ?댁????대룞 ?ㅽ뙣:", err);
+      return res.status(500).json({ message: "?곕젅湲고넻 ?댁????대룞 ?ㅽ뙣" });
     }
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "이동할 쓰레기통을 찾을 수 없습니다." });
+      return res.status(404).json({ message: "?대룞???곕젅湲고넻??李얠쓣 ???놁뒿?덈떎." });
     }
 
-    res.json({ message: "쓰레기통이 휴지통으로 이동되었습니다." });
+    res.json({ message: "?곕젅湲고넻???댁??듭쑝濡??대룞?섏뿀?듬땲??" });
+  });
+});
+
+router.get("/sensor-history", (req, res) => {
+  const sql = `
+    SELECT *
+    FROM (
+      SELECT
+        s.sensor_id,
+        s.bin_id,
+        b.bin_loc,
+        b.network_status,
+        s.temp,
+        s.gas,
+        s.flame,
+        s.fire_risk,
+        s.created_at
+      FROM t_sensor s
+      INNER JOIN t_trashbin b ON b.bin_id = s.bin_id
+      WHERE IFNULL(b.network_status, 1) <> 9
+      ORDER BY s.created_at DESC, s.sensor_id DESC
+      LIMIT 120
+    ) recent_sensor
+    ORDER BY created_at ASC, sensor_id ASC
+  `;
+
+  conn.query(sql, (err, rows) => {
+    if (err) {
+      console.error("센서 이력 조회 실패:", err);
+      return res.status(500).json({ message: "센서 이력 조회 실패" });
+    }
+
+    res.json(filterRowsByRegion(req, rows, "bin_loc"));
   });
 });
 
 module.exports = router;
+
+
+
 
 
 

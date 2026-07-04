@@ -8,7 +8,7 @@ const defaultThresholds = Object.freeze({
   dangerTemp: 60,
   warningTemp: 40,
   dangerSmoke: 230,
-  warningSmoke: 120,
+  warningSmoke: 150,
 });
 
 const defaultSystemSettings = Object.freeze({
@@ -520,6 +520,7 @@ router.get("/api/export/trashbins", (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
