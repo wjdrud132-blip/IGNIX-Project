@@ -114,7 +114,7 @@ async function loadThresholds() {
 }
 
 async function saveThresholds() {
-  if (!canEditThreshold) return alert("?댁쁺?먮쭔 蹂寃쏀븷 ???덉뒿?덈떎.");
+  if (!canEditThreshold) return alert("운영자만 변경할 수 있습니다.");
   const body = Object.fromEntries(thresholdIds.map((id) => [id, document.getElementById(id).value]));
   const res = await fetch("/settings/api/thresholds", {
     method: "POST",
@@ -124,14 +124,14 @@ async function saveThresholds() {
   const result = await res.json();
 
   if (!result.success) {
-    return alert(result.message || "??μ뿉 ?ㅽ뙣?덉뒿?덈떎.");
+    return alert(result.message || "저장에 실패했습니다.");
   }
 
   const systemRes = await fetch("/settings/api/system/data", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      exportRange: document.getElementById("exportRange")?.value || "?꾩껜",
+      exportRange: document.getElementById("exportRange")?.value || "전체",
       aiJudge: "Y",
     }),
   });
@@ -139,7 +139,7 @@ async function saveThresholds() {
 
   fillThresholds(result.thresholds);
   if (systemResult.success) applySystemSettings(systemResult.settings);
-  alert(systemResult.success ? "?ㅼ젙????λ릺?덉뒿?덈떎." : (systemResult.message || "AI ?ㅼ젙 ??μ뿉 ?ㅽ뙣?덉뒿?덈떎."));
+  alert(systemResult.success ? "설정이 저장되었습니다." : (systemResult.message || "AI 설정 저장에 실패했습니다."));
 }
 async function resetThresholds() {
   if (!canEditThreshold) return alert("\uC6B4\uC601\uC790\uB9CC \uCD08\uAE30\uD654\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
@@ -194,7 +194,7 @@ async function loadSystemSettings() {
 
 async function saveDataSettings() {
   const body = {
-    exportRange: document.getElementById("exportRange")?.value || "?꾩껜",
+    exportRange: document.getElementById("exportRange")?.value || "전체",
     aiJudge: "Y",
   };
   const res = await fetch("/settings/api/system/data", {
@@ -203,7 +203,7 @@ async function saveDataSettings() {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  alert(result.message || (result.success ? "??λ릺?덉뒿?덈떎." : "??μ뿉 ?ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (result.success ? "설정이 저장되었습니다." : "설정 저장에 실패했습니다."));
   if (result.success) applySystemSettings(result.settings);
 }
 
@@ -438,10 +438,10 @@ async function restoreTrashbin(binId) {
 }
 
 async function deleteTrashPermanently(binId) {
-  if (!confirm("??젣?섎㈃ ?곕젅湲고넻???꾩쟾????젣?⑸땲?? 怨꾩냽?좉퉴??")) return;
+  if (!confirm("삭제하면 쓰레기통이 완전히 삭제됩니다. 계속할까요?")) return;
   const res = await fetch("/trashbins/trash/" + binId, { method: "DELETE" });
   const result = await res.json();
-  alert(result.message || (res.ok ? "?곕젅湲고넻???꾩쟾????젣?섏뿀?듬땲??" : "??젣???ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (res.ok ? "쓰레기통이 완전히 삭제되었습니다." : "삭제에 실패했습니다."));
   await loadTrashList();
 }
 
@@ -523,7 +523,7 @@ async function saveProfile() {
 
   if (!phone) {
     phoneInput.focus();
-    return alert("?대??꾪솕 踰덊샇???꾩닔?낅땲??");
+    return alert("휴대전화 번호는 필수입니다.");
   }
 
   const body = {
@@ -536,21 +536,21 @@ async function saveProfile() {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  alert(result.message || (result.success ? "怨꾩젙 ?뺣낫媛 ??λ릺?덉뒿?덈떎." : "怨꾩젙 ?뺣낫 ??μ뿉 ?ㅽ뙣?덉뒿?덈떎."));
+  alert(result.message || (result.success ? "계정 정보가 저장되었습니다." : "계정 정보 저장에 실패했습니다."));
   if (!result.success) return;
   loadProfile();
 }
 
 async function withdrawAccount() {
-  if (!confirm("?뺣쭚 怨꾩젙???덊눜?섏떆寃좎뒿?덇퉴?")) return;
-  const confirmText = prompt("怨꾩젙 ?덊눜瑜?吏꾪뻾?섎젮硫?'?덊눜'瑜??낅젰?댁＜?몄슂.");
-  if (confirmText !== "?덊눜") return alert("怨꾩젙 ?덊눜媛 痍⑥냼?섏뿀?듬땲??");
+  if (!confirm("정말 계정을 탈퇴하시겠습니까?")) return;
+  const confirmText = prompt("계정 탈퇴를 진행하려면 '탈퇴'를 입력해주세요.");
+  if (confirmText !== "탈퇴") return alert("계정 탈퇴가 취소되었습니다.");
 
   const res = await fetch("/settings/api/profile", { method: "DELETE" });
   const result = await res.json();
   if (!result.success) return alert(result.message || "계정 정보를 불러오지 못했습니다.");
 
-  alert("?덊눜?섏뿀?듬땲??");
+  alert("탈퇴되었습니다.");
   sessionStorage.clear();
   location.replace("/");
 }
@@ -583,7 +583,7 @@ function syncActiveNavByScroll() {
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await fetch("/manager/logout", { method: "POST" });
   sessionStorage.clear();
-  alert("濡쒓렇?꾩썐?섏뿀?듬땲??");
+  alert("로그아웃되었습니다.");
   location.replace("/");
 });
 document.getElementById("setContent").addEventListener("scroll", syncActiveNavByScroll);
@@ -720,6 +720,8 @@ lockThresholdInputs();
 loadThresholds();
 loadSystemSettings();
 loadProfile();
+
+
 
 
 

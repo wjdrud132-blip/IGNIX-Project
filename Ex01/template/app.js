@@ -10,7 +10,7 @@ const settingsRouter = require("./routes/settings");
 const aiRouter = require("./routes/ai");
 const requireOperator = require("./middlewares/requireOperator");
 
-const app = express(); // express??紐⑤뱺湲곕뒫??app???댁븘以?
+const app = express();
 
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
@@ -96,6 +96,7 @@ app.set("view engine", "ejs");
 app.set("views", __dirname + "/views");
 
 app.listen(3000);
+
 
 
 

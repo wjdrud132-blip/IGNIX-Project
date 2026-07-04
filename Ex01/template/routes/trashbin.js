@@ -71,8 +71,8 @@ function getSensorModel(thresholds, callback) {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("t_sensor AI ?숈뒿 ?곗씠??議고쉶 ?ㅽ뙣:", err);
-      return callback(null, { available: false, sampleCount: 0, reason: "t_sensor ?숈뒿 ?곗씠?곕? 遺덈윭?ㅼ? 紐삵빐 湲곗〈 ?꾧퀎媛?湲곗????ъ슜?⑸땲??" });
+      console.error("t_sensor AI 학습 데이터 조회 실패:", err);
+      return callback(null, { available: false, sampleCount: 0, reason: "t_sensor 학습 데이터를 불러오지 못해 기존 임계값 기준을 사용합니다." });
     }
 
     cachedSensorModel = trainSensorModel(rows, thresholds);
@@ -117,8 +117,8 @@ function queryAsync(sql, params = []) {
 }
 
 function alertMessageFor(row) {
-  if (row.alert_type === "danger") return "?붿옱 ?꾪뿕 媛먯? - 利됯컖 ????꾩슂";
-  if (row.alert_type === "warning") return "?⑤룄 諛??곌린 ?꾧퀎媛?珥덇낵";
+  if (row.alert_type === "danger") return "화재 위험 감지 - 즉각 대응 필요";
+  if (row.alert_type === "warning") return "온도 및 연기 임계값 초과";
   return "";
 }
 
@@ -181,6 +181,26 @@ async function getLatestSavedAlertStatus(row) {
 
   return rows.length ? rows[0].alert_type : null;
 }
+async function hasRecentSameAlert(row) {
+  const rows = await queryAsync(
+    `SELECT alert_id
+     FROM t_alert
+     WHERE bin_id = ?
+       AND alert_type = ?
+       AND alerted_at >= DATE_SUB(?, INTERVAL ? MINUTE)
+       AND alerted_at <= ?
+     LIMIT 1`,
+    [
+      row.bin_id,
+      row.alert_type,
+      row.sensor_created_at,
+      SAME_ALERT_COOLDOWN_MINUTES,
+      row.sensor_created_at,
+    ]
+  );
+
+  return rows.length > 0;
+}
 async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) {
   if (!row || row.sensor_online !== "Y") return;
   if (row.alert_type !== "danger" && row.alert_type !== "warning") return;
@@ -205,7 +225,8 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
     if (exists.length) return;
 
     const previousStatus = await getPreviousSensorStatus(row, thresholds, aiEnabled, sensorModel);
-    if (previousStatus === row.alert_type) return;
+    const latestSavedStatus = await getLatestSavedAlertStatus(row);
+    if (previousStatus === row.alert_type && latestSavedStatus === row.alert_type) return;
 
     if (await hasRecentSameAlert(row)) return;
 
@@ -239,17 +260,82 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
 async function saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel) {
   const targets = judgedRows
     .filter((row) => row.alert_type === "danger" || row.alert_type === "warning")
-    .sort((a, b) => alertStatusRank(b.alert_type) - alertStatusRank(a.alert_type) || new Date(a.sensor_created_at) - new Date(b.sensor_created_at));
+    .sort((a, b) => new Date(a.sensor_created_at) - new Date(b.sensor_created_at) || alertStatusRank(b.alert_type) - alertStatusRank(a.alert_type));
 
   for (const row of targets) {
     try {
       await saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel);
     } catch (err) {
-      console.error("?쇱꽌 ?뚮┝ 湲곕줉 ????ㅽ뙣:", err);
+      console.error("센서 알림 기록 저장 실패:", err);
     }
   }
 }
 
+async function saveRecentSensorAlerts(req, thresholds, aiEnabled, sensorModel) {
+  const recentSql = `
+    SELECT
+      b.bin_id,
+      b.bin_loc,
+      b.mgr_id,
+      b.network_status,
+      s.sensor_id,
+      s.temp AS temp_value,
+      s.gas AS smoke_value,
+      s.flame AS flame_value,
+      s.ir_count,
+      s.fire_risk,
+      s.created_at AS sensor_created_at,
+      s.prev_temp,
+      s.prev_gas,
+      s.prev_ir_count,
+      s.prev_created_at,
+      CASE
+        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.temp - s.prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
+      END AS temp_change,
+      CASE
+        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.gas - s.prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
+      END AS gas_change
+    FROM t_trashbin b
+    INNER JOIN (
+      SELECT
+        sensor_changes.*,
+        LAG(sensor_changes.temp) OVER (PARTITION BY sensor_changes.bin_id ORDER BY sensor_changes.created_at, sensor_changes.sensor_id) AS prev_temp,
+        LAG(sensor_changes.gas) OVER (PARTITION BY sensor_changes.bin_id ORDER BY sensor_changes.created_at, sensor_changes.sensor_id) AS prev_gas,
+        LAG(sensor_changes.ir_count) OVER (PARTITION BY sensor_changes.bin_id ORDER BY sensor_changes.created_at, sensor_changes.sensor_id) AS prev_ir_count,
+        LAG(sensor_changes.created_at) OVER (PARTITION BY sensor_changes.bin_id ORDER BY sensor_changes.created_at, sensor_changes.sensor_id) AS prev_created_at
+      FROM (
+        SELECT *
+        FROM t_sensor
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+      ) sensor_changes
+    ) s ON s.bin_id = b.bin_id
+    WHERE IFNULL(b.network_status, 1) <> 9
+    ORDER BY s.created_at ASC, s.sensor_id ASC
+    LIMIT 1000
+  `;
+
+  const recentRows = filterRowsByRegion(req, await queryAsync(recentSql), "bin_loc");
+  const judgedRows = recentRows.map((row) => {
+    const ruleStatus = row.fire_risk === 2 ? "danger" : row.fire_risk === 1 ? "warning" : "normal";
+    const ai = judgeDanger({ ...row, sensor_online: "Y", alert_type: ruleStatus, alert_msg: "" }, thresholds, aiEnabled, sensorModel);
+
+    return {
+      ...row,
+      sensor_online: "Y",
+      rule_status: ruleStatus,
+      alert_type: ai.status,
+      ai_enabled: aiEnabled ? "Y" : "N",
+      ai_status: ai.status,
+      temp_value: ai.sensor.temp,
+      smoke_value: ai.sensor.smoke,
+      flame_value: ai.sensor.flame,
+    };
+  });
+
+  await saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel);
+}
 router.get("/list", (req, res) => {
   const sql = `
     SELECT
@@ -342,13 +428,13 @@ router.get("/list", (req, res) => {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("?곕젅湲고넻 紐⑸줉 議고쉶 ?ㅽ뙣:", err);
-      return res.status(500).json({ message: "?곕젅湲고넻 紐⑸줉 議고쉶 ?ㅽ뙣" });
+      console.error("쓰레기통 목록 조회 실패:", err);
+      return res.status(500).json({ message: "쓰레기통 목록 조회 실패" });
     }
 
     rows = dedupeRowsByLocation(filterRowsByRegion(req, rows, "bin_loc"), "bin_loc");
 
-    const thresholdSql = "SELECT danger_temp, warning_temp, danger_smoke, warning_smoke FROM t_fire_threshold WHERE id = 1";
+    const thresholdSql = "SELECT danger_temp, warning_temp, danger_gas, warning_gas FROM t_fire_threshold WHERE id = 1";
     const aiSql = "SELECT setting_value FROM t_system_setting WHERE setting_key = 'aiJudge'";
 
     conn.query(thresholdSql, (thresholdErr, thresholdRows) => {
@@ -356,8 +442,8 @@ router.get("/list", (req, res) => {
       const thresholds = thresholdErr || !thresholdRow ? defaultThresholds : {
         dangerTemp: Number(thresholdRow.danger_temp),
         warningTemp: Number(thresholdRow.warning_temp),
-        dangerSmoke: Number(thresholdRow.danger_smoke),
-        warningSmoke: Number(thresholdRow.warning_smoke),
+        dangerSmoke: Number(thresholdRow.danger_gas),
+        warningSmoke: Number(thresholdRow.warning_gas),
       };
 
       conn.query(aiSql, (aiErr, aiRows) => {
@@ -375,7 +461,7 @@ router.get("/list", (req, res) => {
               alert_type: ai.status,
               ai_enabled: aiEnabled ? "Y" : "N",
               ai_status: ai.status,
-              ai_reason: currentRow.sensor_online === "Y" ? ai.reason.join(" ") : "理쒓렐 ?쇱꽌 ?곗씠???섏떊???놁뼱 ?ㅽ봽?쇱씤?쇰줈 ?쒖떆?⑸땲??",
+              ai_reason: currentRow.sensor_online === "Y" ? ai.reason.join(" ") : "최근 센서 데이터 수신이 없어 오프라인으로 표시합니다.",
               ai_confidence: currentRow.sensor_online === "Y" ? ai.confidence : 0,
               ai_model_sample_count: sensorModel && sensorModel.sampleCount ? sensorModel.sampleCount : 0,
               temp_value: currentRow.sensor_online === "Y" ? ai.sensor.temp : null,
@@ -386,7 +472,11 @@ router.get("/list", (req, res) => {
             const rank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
             return rank(a.alert_type) - rank(b.alert_type) || Number(a.bin_id) - Number(b.bin_id);
           });
-          saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel).finally(() => res.json(judgedRows));
+          res.json(judgedRows);
+
+          saveRecentSensorAlerts(req, thresholds, aiEnabled, sensorModel)
+            .then(() => saveSensorAlerts(judgedRows, thresholds, aiEnabled, sensorModel))
+            .catch((err) => console.error("알림 기록 저장 실패:", err));
         });
       });
     });
@@ -412,8 +502,8 @@ router.get("/trash/list", (req, res) => {
 
   conn.query(sql, (err, rows) => {
     if (err) {
-      console.error("?댁???紐⑸줉 議고쉶 ?ㅽ뙣:", err);
-      return res.status(500).json({ message: "?댁???紐⑸줉 議고쉶 ?ㅽ뙣" });
+      console.error("휴지통 목록 조회 실패:", err);
+      return res.status(500).json({ message: "휴지통 목록 조회 실패" });
     }
 
     res.json(filterRowsByRegion(req, rows, "bin_loc").map((row) => ({ ...row, display_bin_id: displayBinId(row.bin_id) })));
@@ -446,21 +536,21 @@ router.delete("/trash/:bin_id", (req, res) => {
 
   conn.query("DELETE FROM t_alert WHERE bin_id = ?", [bin_id], (alertErr) => {
     if (alertErr) {
-      console.error("?댁????뚮┝ ?꾩쟾 ??젣 ?ㅽ뙣:", alertErr);
-      return res.status(500).json({ message: "?뚮┝ ?곗씠????젣 ?ㅽ뙣" });
+      console.error("휴지통 알림 완전 삭제 실패:", alertErr);
+      return res.status(500).json({ message: "알림 데이터 삭제 실패" });
     }
 
     conn.query("DELETE FROM t_trashbin WHERE bin_id = ? AND network_status = 9", [bin_id], (err, result) => {
       if (err) {
-        console.error("?댁????곕젅湲고넻 ?꾩쟾 ??젣 ?ㅽ뙣:", err);
-        return res.status(500).json({ message: "?꾩쟾 ??젣 ?ㅽ뙣" });
+        console.error("휴지통 쓰레기통 완전 삭제 실패:", err);
+        return res.status(500).json({ message: "완전 삭제 실패" });
       }
 
       if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "?댁??듭뿉????젣???곕젅湲고넻??李얠쓣 ???놁뒿?덈떎." });
+        return res.status(404).json({ message: "휴지통에서 삭제할 쓰레기통을 찾을 수 없습니다." });
       }
 
-      res.json({ message: "DB?먯꽌 ?꾩쟾????젣?섏뿀?듬땲??" });
+      res.json({ message: "쓰레기통이 완전히 삭제되었습니다." });
     });
   });
 });
@@ -475,11 +565,11 @@ router.post("/", (req, res) => {
   const installer_phone = String(req.body.manager_phone || req.body.installer_phone || "").trim();
 
   if (!bin_id || !Number.isInteger(bin_id) || bin_id < 1) {
-    return res.status(400).json({ message: "?곕젅湲고넻 ID瑜??낅젰?댁＜?몄슂." });
+    return res.status(400).json({ message: "쓰레기통 ID를 입력해주세요." });
   }
 
   if (!bin_loc || !installed_at || !mgr_id) {
-    return res.status(400).json({ message: "?꾩튂? ?ㅼ튂?쇱쓣 ?낅젰?섍퀬 濡쒓렇???곹깭瑜??뺤씤?댁＜?몄슂." });
+    return res.status(400).json({ message: "위치와 설치일을 입력하고 로그인 상태를 확인해주세요." });
   }
 
   const sql = `
@@ -492,15 +582,15 @@ router.post("/", (req, res) => {
   conn.query(sql, [bin_id, bin_loc, installed_at, mgr_id, network_status || 1, installer_name || null, installer_phone || null], (err) => {
     if (err) {
       if (err.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({ message: "?대? ?깅줉???곕젅湲고넻 ID?낅땲??" });
+        return res.status(409).json({ message: "이미 등록된 쓰레기통 ID입니다." });
       }
 
-      console.error("?곕젅湲고넻 ?깅줉 ?ㅽ뙣:", err);
-      return res.status(500).json({ message: "?곕젅湲고넻 ?깅줉 ?ㅽ뙣" });
+      console.error("쓰레기통 등록 실패:", err);
+      return res.status(500).json({ message: "쓰레기통 등록 실패" });
     }
 
     res.json({
-      message: "?곕젅湲고넻???깅줉?섏뿀?듬땲??",
+      message: "쓰레기통이 등록되었습니다.",
       bin_id,
     });
   });
@@ -516,15 +606,15 @@ router.delete("/:bin_id", (req, res) => {
 
   conn.query(sql, [bin_id], (err, result) => {
     if (err) {
-      console.error("?곕젅湲고넻 ?댁????대룞 ?ㅽ뙣:", err);
-      return res.status(500).json({ message: "?곕젅湲고넻 ?댁????대룞 ?ㅽ뙣" });
+      console.error("쓰레기통 휴지통 이동 실패:", err);
+      return res.status(500).json({ message: "쓰레기통 휴지통 이동 실패" });
     }
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "?대룞???곕젅湲고넻??李얠쓣 ???놁뒿?덈떎." });
+      return res.status(404).json({ message: "이동할 쓰레기통을 찾을 수 없습니다." });
     }
 
-    res.json({ message: "?곕젅湲고넻???댁??듭쑝濡??대룞?섏뿀?듬땲??" });
+    res.json({ message: "쓰레기통이 휴지통으로 이동되었습니다." });
   });
 });
 
@@ -563,6 +653,13 @@ router.get("/sensor-history", (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+
+
+
 
 
 

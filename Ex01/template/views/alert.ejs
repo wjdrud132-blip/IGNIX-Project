@@ -322,7 +322,7 @@
     }
 
     function renderAlertCalendarDays() {
-      if (!alertRecordDateKey) { const source = dailyRecordRows.length ? dailyRecordRows[0] : alertRows[0]; const first = source && source.alerted_at ? new Date(source.alerted_at) : new Date(); alertCalendarViewDate = new Date(first.getFullYear(), first.getMonth(), 1); alertRecordDateKey = recordKey(first); }
+      if (!alertRecordDateKey) { const source = dailyRecordRows.length ? dailyRecordRows[0] : alertRows[0]; const firstKey = source && source.record_date ? source.record_date : source && source.alerted_at ? recordKey(new Date(source.alerted_at)) : recordKey(new Date()); const parts = firstKey.split("-").map(Number); const first = new Date(parts[0], parts[1] - 1, parts[2]); alertCalendarViewDate = new Date(first.getFullYear(), first.getMonth(), 1); alertRecordDateKey = firstKey; }
       const y = alertCalendarViewDate.getFullYear(); const m = alertCalendarViewDate.getMonth(); const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0).getDate();
       $("alertCalendarTitle").textContent = `${y}년 ${m + 1}월`;
       let html = ""; for (let i = 0; i < first.getDay(); i++) html += "<span></span>";
@@ -336,7 +336,7 @@
       const severityRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
       const bestByBin = new Map();
       dailyRecordRows
-        .filter((r) => r.alerted_at && recordKey(new Date(r.alerted_at)) === alertRecordDateKey)
+        .filter((r) => (r.record_date || (r.alerted_at ? recordKey(new Date(r.alerted_at)) : "")) === alertRecordDateKey)
         .forEach((row) => {
           const key = String(row.bin_id || row.display_bin_id || "");
           const old = bestByBin.get(key);
@@ -443,6 +443,7 @@
   <script src="/js/topbar-alert.js"></script>
 </body>
 </html>
+
 
 
 

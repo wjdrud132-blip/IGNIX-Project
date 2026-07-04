@@ -1,4 +1,4 @@
-const LIVE_ALERT_STATUS_KEY = "fidsLiveAlertStatusByBin";
+﻿const LIVE_ALERT_STATUS_KEY = "fidsLiveAlertStatusByBin";
 const FIRE_ALERT_POLL_MS = 3000;
 
 function loadAlertStatusByBin() {

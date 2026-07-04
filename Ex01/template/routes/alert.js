@@ -21,14 +21,14 @@ function query(sql, params = []) {
 
 async function getThresholds() {
   try {
-    const rows = await query("SELECT danger_temp, warning_temp, danger_smoke, warning_smoke FROM t_fire_threshold WHERE id = 1");
+    const rows = await query("SELECT danger_temp, warning_temp, danger_gas, warning_gas FROM t_fire_threshold WHERE id = 1");
     const row = rows && rows[0];
     if (!row) return defaultThresholds;
     return {
       dangerTemp: Number(row.danger_temp),
       warningTemp: Number(row.warning_temp),
-      dangerSmoke: Number(row.danger_smoke),
-      warningSmoke: Number(row.warning_smoke),
+      dangerSmoke: Number(row.danger_gas),
+      warningSmoke: Number(row.warning_gas),
     };
   } catch (err) {
     return defaultThresholds;
@@ -205,8 +205,8 @@ router.get("/daily-records", async (req, res) => {
         s.gas AS smoke_value,
         s.flame AS flame_value,
         s.fire_risk,
-        s.temp_change,
-        s.gas_change,
+        s.calc_temp_change AS temp_change,
+        s.calc_gas_change AS gas_change,
         s.created_at AS alerted_at,
         DATE_FORMAT(s.created_at, '%Y-%m-%d') AS record_date,
         CASE
@@ -223,11 +223,11 @@ router.get("/daily-records", async (req, res) => {
           CASE
             WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
             ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-          END AS temp_change,
+          END AS calc_temp_change,
           CASE
             WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
             ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-          END AS gas_change
+          END AS calc_gas_change
         FROM (
           SELECT
             s.*,
@@ -317,6 +317,9 @@ router.post("/read-all", async (req, res) => {
 });
 
 module.exports = router;
+
+
+
 
 
 

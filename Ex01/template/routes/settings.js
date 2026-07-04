@@ -56,8 +56,8 @@ function toClient(row) {
   return {
     dangerTemp: Number(row.danger_temp),
     warningTemp: Number(row.warning_temp),
-    dangerSmoke: Number(row.danger_smoke),
-    warningSmoke: Number(row.warning_smoke),
+    dangerSmoke: Number(row.danger_gas),
+    warningSmoke: Number(row.warning_gas),
   };
 }
 
@@ -67,8 +67,8 @@ async function ensureThresholdTable() {
       id INT NOT NULL PRIMARY KEY,
       danger_temp DECIMAL(5,1) NOT NULL,
       warning_temp DECIMAL(5,1) NOT NULL,
-      danger_smoke INT NOT NULL,
-      warning_smoke INT NOT NULL,
+      danger_gas INT NOT NULL,
+      warning_gas INT NOT NULL,
       updated_by INT NULL,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -76,7 +76,7 @@ async function ensureThresholdTable() {
 
   await query(
     `INSERT IGNORE INTO t_fire_threshold
-      (id, danger_temp, warning_temp, danger_smoke, warning_smoke)
+      (id, danger_temp, warning_temp, danger_gas, warning_gas)
      VALUES (1, ?, ?, ?, ?)`,
     [defaultThresholds.dangerTemp, defaultThresholds.warningTemp, defaultThresholds.dangerSmoke, defaultThresholds.warningSmoke]
   );
@@ -230,7 +230,7 @@ router.post("/api/thresholds", requireOperator, async (req, res) => {
     await ensureThresholdTable();
     await query(
       `UPDATE t_fire_threshold
-       SET danger_temp = ?, warning_temp = ?, danger_smoke = ?, warning_smoke = ?, updated_by = ?
+       SET danger_temp = ?, warning_temp = ?, danger_gas = ?, warning_gas = ?, updated_by = ?
        WHERE id = 1`,
       [next.dangerTemp, next.warningTemp, next.dangerSmoke, next.warningSmoke, req.session.user.user_id]
     );
@@ -248,7 +248,7 @@ router.post("/api/thresholds/reset", requireOperator, async (req, res) => {
     await ensureThresholdTable();
     await query(
       `UPDATE t_fire_threshold
-       SET danger_temp = ?, warning_temp = ?, danger_smoke = ?, warning_smoke = ?, updated_by = ?
+       SET danger_temp = ?, warning_temp = ?, danger_gas = ?, warning_gas = ?, updated_by = ?
        WHERE id = 1`,
       [defaultThresholds.dangerTemp, defaultThresholds.warningTemp, defaultThresholds.dangerSmoke, defaultThresholds.warningSmoke, req.session.user.user_id]
     );
@@ -521,6 +521,7 @@ router.get("/api/export/trashbins", (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
