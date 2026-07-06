@@ -95,7 +95,7 @@ function irContext(sensor) {
   const hasIrCount = isNumber(irCount);
   const hasPrevIrCount = isNumber(prevIrCount);
   return {
-    sunlightLike: hasIrCount && irCount >= 4 && (!hasPrevIrCount || prevIrCount >= 4),
+    sunlightLike: hasIrCount && ((hasPrevIrCount && irCount >= 4 && prevIrCount >= 5) || (!hasPrevIrCount && prevIrCount >= 4)),
     shadeStable: hasIrCount && irCount === 0 && (!hasPrevIrCount || prevIrCount === 0),
   };
 }
