@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 
 const conn = require("../config/db");
@@ -128,8 +128,8 @@ function alertMessageFor(row) {
   }
 
   if (row.alert_type === "warning") {
-    if (reason.includes("연기값 증가폭") || reason.includes("연기값이 학습 데이터")) return "연기값 증가폭 이상 감지";
-    if (reason.includes("온도 증가폭") || reason.includes("온도 증가폭이 학습 데이터")) return "온도 증가폭 이상 감지";
+    if (reason.includes("연기값 증가폭") || reason.includes("연기값이 학습 데이터")) return "연기 센서 증가폭 이상 감지";
+    if (reason.includes("온도 증가폭") || reason.includes("온도 증가폭이 학습 데이터")) return "온도 센서 증가폭 이상 감지";
     if (reason.includes("연기") && reason.includes("온도")) return "온도·연기 주의 기준 감지";
     if (reason.includes("연기")) return "연기 감지값 주의 기준 초과";
     if (reason.includes("온도")) return "온도 상승 주의 관찰";

@@ -208,6 +208,10 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
     dangerSmoke,
     warningTemp,
     dangerTemp,
+    fixedDangerSmoke: thresholds.dangerSmoke,
+    fixedWarningSmoke: thresholds.warningSmoke,
+    fixedDangerTemp: thresholds.dangerTemp,
+    fixedWarningTemp: thresholds.warningTemp,
     gasChangeP90,
     tempChangeP90,
     binBaselines,
@@ -222,10 +226,30 @@ function judgeWithModel(row, sensor, model) {
   const binBase = model.binBaselines && model.binBaselines[row.bin_id];
   const baselineSmokeP95 = binBase && isNumber(binBase.smokeP95) ? binBase.smokeP95 : null;
   const baselineTempP95 = binBase && isNumber(binBase.tempP95) ? binBase.tempP95 : null;
-  const adaptiveWarningSmoke = Math.max(model.warningSmoke, isNumber(baselineSmokeP95) ? baselineSmokeP95 + 10 : 0);
-  const adaptiveDangerSmoke = Math.max(model.dangerSmoke, adaptiveWarningSmoke + 80);
-  const adaptiveWarningTemp = Math.max(model.warningTemp, isNumber(baselineTempP95) ? baselineTempP95 + 6 : 0);
-  const adaptiveDangerTemp = Math.max(model.dangerTemp, isNumber(baselineTempP95) ? baselineTempP95 + 25 : 0);
+  const fixedWarningSmoke = isNumber(model.fixedWarningSmoke) ? model.fixedWarningSmoke : defaultThresholds.warningSmoke;
+  const fixedDangerSmoke = isNumber(model.fixedDangerSmoke) ? model.fixedDangerSmoke : defaultThresholds.dangerSmoke;
+  const fixedWarningTemp = isNumber(model.fixedWarningTemp) ? model.fixedWarningTemp : defaultThresholds.warningTemp;
+  const fixedDangerTemp = isNumber(model.fixedDangerTemp) ? model.fixedDangerTemp : defaultThresholds.dangerTemp;
+
+  const adaptiveWarningSmoke = Math.min(
+  Math.max(model.warningSmoke, isNumber(baselineSmokeP95) ? baselineSmokeP95 + 10 : 0),
+  fixedWarningSmoke
+);
+
+const adaptiveDangerSmoke = Math.min(
+  Math.max(model.dangerSmoke, adaptiveWarningSmoke + 1),
+  fixedDangerSmoke
+);
+
+const adaptiveWarningTemp = Math.min(
+  Math.max(model.warningTemp, isNumber(baselineTempP95) ? baselineTempP95 + 6 : 0),
+  fixedWarningTemp
+);
+
+const adaptiveDangerTemp = Math.min(
+  Math.max(model.dangerTemp, adaptiveWarningTemp + 1),
+  fixedDangerTemp
+);
   const smoke = sensor.smoke;
   const temp = sensor.temp;
   const flame = sensor.flame;
