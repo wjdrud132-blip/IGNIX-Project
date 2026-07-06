@@ -5,6 +5,27 @@
   warningSmoke: 150,
 });
 
+const GAS_GAP = 30;
+const TEMP_GAP = 1.2;
+
+function classifyWithHysteresis(smokeAvg, tempAvg, dangerScore, warningScore, prevStatus, thresholds) {
+  const dangerUp = dangerScore >= 3;
+  const warningUp = warningScore >= 1 || dangerUp;
+
+  const dangerDown = smokeAvg < (thresholds.dangerSmoke - GAS_GAP) && tempAvg < (thresholds.dangerTemp - TEMP_GAP);
+  const warningDown = smokeAvg < (thresholds.warningSmoke - GAS_GAP) && tempAvg < (thresholds.warningTemp - TEMP_GAP);
+
+  if (prevStatus === "danger") {
+    if (!dangerDown) return "danger";
+    return warningDown ? "normal" : "warning";
+  }
+  if (prevStatus === "warning") {
+    if (dangerUp) return "danger";
+    return warningDown ? "normal" : "warning";
+  }
+  return dangerUp ? "danger" : warningUp ? "warning" : "normal";
+}
+
 function originalStatus(row) {
   if (row && row.alert_type === "danger") return "danger";
   if (row && row.alert_type === "warning") return "warning";
@@ -214,7 +235,7 @@ function trainSensorModel(rows = [], thresholds = defaultThresholds) {
   };
 }
 
-function judgeWithModel(row, sensor, model) {
+function judgeWithModel(row, sensor, model, prevStatus) {
   const reasons = [];
   let dangerScore = 0;
   let warningScore = 0;
@@ -294,9 +315,13 @@ function judgeWithModel(row, sensor, model) {
     adaptiveDangerSmoke
   ));
 
-  let status = "normal";
-  if (dangerScore >= 3) status = "danger";
-  else if (warningScore >= 1) status = "warning";
+  const effectiveThresholds = {
+    dangerSmoke: adaptiveDangerSmoke,
+    warningSmoke: adaptiveWarningSmoke,
+    dangerTemp: adaptiveDangerTemp,
+    warningTemp: adaptiveWarningTemp,
+  };
+  const status = classifyWithHysteresis(smoke, temp, dangerScore, warningScore, prevStatus, effectiveThresholds);
 
   if (status === "normal") {
     reasons.push("임계값 기준으로 정상 범위입니다.");
@@ -309,7 +334,7 @@ function judgeWithModel(row, sensor, model) {
   };
 }
 
-function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model = null) {
+function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model = null, prevStatus = "normal") {
   const sensor = parseSensorValues(row || {});
   const baseStatus = originalStatus(row || {});
 
@@ -323,7 +348,7 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model 
   }
 
   if (model && model.available) {
-    const judged = judgeWithModel(row || {}, sensor, model);
+    const judged = judgeWithModel(row || {}, sensor, model, prevStatus);
     return {
       ...judged,
       sensor,
@@ -394,9 +419,7 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model 
     ));
   }
 
-  let status = "normal";
-  if (hardDanger || dangerScore >= 3) status = "danger";
-  else if (warningScore >= 1) status = "warning";
+ const status = classifyWithHysteresis(sensor.smoke, sensor.temp, dangerScore, warningScore, prevStatus, thresholds);
 
   if (status === "normal") {
     if (!isNumber(sensor.temp) && !isNumber(sensor.smoke) && !isNumber(sensor.flame)) {
