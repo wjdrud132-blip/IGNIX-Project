@@ -379,16 +379,23 @@ function judgeDanger(row, thresholds = defaultThresholds, enabled = true, model 
     reasons.push("온도와 연기값이 동시에 상승해 위험 가능성이 있습니다.");
   }
 
-  ({ dangerScore, warningScore } = applyCoolingAdjustment(
-    { dangerScore, warningScore },
-    reasons,
-    sensor,
-    thresholds.dangerTemp,
-    thresholds.dangerSmoke
-  ));
+  const hardDanger =
+    (isNumber(sensor.smoke) && sensor.smoke >= thresholds.dangerSmoke) ||
+    (isNumber(sensor.temp) && sensor.temp >= thresholds.dangerTemp) ||
+    flameUsable;
+
+  if (!hardDanger) {
+    ({ dangerScore, warningScore } = applyCoolingAdjustment(
+      { dangerScore, warningScore },
+      reasons,
+      sensor,
+      thresholds.dangerTemp,
+      thresholds.dangerSmoke
+    ));
+  }
 
   let status = "normal";
-  if (dangerScore >= 3) status = "danger";
+  if (hardDanger || dangerScore >= 3) status = "danger";
   else if (warningScore >= 1) status = "warning";
 
   if (status === "normal") {
@@ -413,6 +420,7 @@ module.exports = {
   parseSensorValues,
   trainSensorModel,
 };
+
 
 
 

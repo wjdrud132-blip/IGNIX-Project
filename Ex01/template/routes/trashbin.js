@@ -258,7 +258,8 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
          FROM t_alert
          WHERE bin_id = ?
            AND alert_type = ?
-           AND alerted_at = ?
+           AND alerted_at >= DATE_SUB(?, INTERVAL ? MINUTE)
+           AND alerted_at <= ?
        )`,
       [
         row.bin_id,
@@ -268,6 +269,8 @@ async function saveSensorAlertIfNeeded(row, thresholds, aiEnabled, sensorModel) 
         row.mgr_id,
         row.bin_id,
         row.alert_type,
+        row.sensor_created_at,
+        SAME_ALERT_COOLDOWN_MINUTES,
         row.sensor_created_at,
       ]
     );
@@ -672,6 +675,7 @@ router.get("/sensor-history", (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
