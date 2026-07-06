@@ -27,16 +27,16 @@ function initOpen(){
 }function visibleSensorRows(){const sf=statusFilter.value,gun=initialGun;return sensors.filter(r=>{const st=statusOf(r);return(!sf||st===sf)&&(!gun||r.gun===gun)}).sort((a,b)=>rank(statusOf(a))-rank(statusOf(b))||Number(a.bin_id)-Number(b.bin_id))}function smokeTrendSvg(target){
   const danger=Number(smokeThresholds.dangerSmoke)||230,warning=Number(smokeThresholds.warningSmoke)||150;
   const w=286,h=104,ox=26,oy=8;
-  const axisMin=80;
-  const axisMax=Math.max(danger,warning,axisMin+20);
+  const axisMin=0;
   const targetId=target?Number(target.bin_id):0;
   const rows=smokeHistory.filter(r=>Number(r.bin_id)===targetId).sort((a,b)=>{const ta=new Date(a.sensed_at||a.created_at||a.alerted_at||a.received_at||0).getTime();const tb=new Date(b.sensed_at||b.created_at||b.alerted_at||b.received_at||0).getTime();return ta-tb;}).slice(-12);
   let vals=rows.map(r=>Number(r.gas)).filter(v=>Number.isFinite(v));
   if(!target || statusOf(target)==="offline" || !vals.length) vals=Array(12).fill(0);
+  const axisMax=Math.ceil(Math.max(danger*2,warning*2,...vals,100)/100)*100;
   const clamp=v=>Math.max(axisMin,Math.min(axisMax,Number(v)||0));
   const y=v=>oy+h-((clamp(v)-axisMin)/(axisMax-axisMin))*h;
   const x=i=>ox+(w/Math.max(vals.length-1,1))*i;
-  const tickVals=[];for(let t=axisMin;t<axisMax;t+=20) tickVals.push(t);
+  const tickVals=[];for(let t=axisMin;t<=axisMax;t+=100) tickVals.push(t);
   const grid=tickVals.map(t=>`<line class="rt-axis" x1="${ox}" y1="${y(t)}" x2="${ox+w}" y2="${y(t)}"></line><text class="rt-label" x="${ox-5}" y="${y(t)+3}" text-anchor="end">${t}</text>`).join("");
   const points=vals.map((v,i)=>`${x(i)},${y(v)}`).join(" ");
   const area=`${ox},${oy+h} ${points} ${ox+w},${oy+h}`;
