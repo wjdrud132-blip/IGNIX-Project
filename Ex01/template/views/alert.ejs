@@ -255,9 +255,26 @@
     function setNowText() { const n = new Date(); const w = ["일", "월", "화", "수", "목", "금", "토"][n.getDay()]; $("nowText").textContent = `${n.getFullYear()}.${String(n.getMonth()+1).padStart(2,"0")}.${String(n.getDate()).padStart(2,"0")} (${w}) ${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}:${String(n.getSeconds()).padStart(2,"0")}`; }
     function typeLabel(t) { return t === "danger" ? "위험 감지" : t === "warning" ? "주의 감지" : t === "normal" ? "정상" : "알림"; }
     function typeIcon(t) { return t === "danger" ? "ti-flame" : t === "warning" ? "ti-alert-triangle" : "ti-bell"; }
-    function messageFor(t) { return t === "danger" ? "화재 위험 감지 - 즉각 대응 필요" : t === "warning" ? "온도 및 연기 임계값 초과" : t === "normal" ? "센서 상태 정상" : "알림 발생"; }
+    function messageFor(t) { return t === "danger" ? "화재 위험 감지 - 즉각 대응 필요" : t === "warning" ? "주의 상태 감지 - 모니터링 필요" : t === "normal" ? "센서 상태 정상" : "알림 발생"; }
+    function rowMessage(row) {
+      if (!row) return messageFor("");
+      const msg = String(row.alert_msg || "").trim();
+      if (msg && msg !== "온도 및 연기 임계값 초과") return msg;
+      if (row.alert_type === "warning") {
+        const temp = Number(row.temp_value);
+        const smoke = Number(row.smoke_value);
+        const tempHigh = Number.isFinite(temp) && temp >= 40;
+        const smokeHigh = Number.isFinite(smoke) && smoke >= 150;
+        if (tempHigh && smokeHigh) return "온도·연기 주의 기준 감지";
+        if (smokeHigh) return "연기 감지값 주의 기준 초과";
+        if (tempHigh) return "온도 상승 주의 관찰";
+        return "센서값 증가폭 이상 감지";
+      }
+      return msg || messageFor(row.alert_type);
+    }
     function displayBinId(row) { const id = row && row.display_bin_id != null ? row.display_bin_id : row && row.bin_id; return String(id || "").padStart(2, "0"); }
     function timeOnly(v) { if (!v) return "-"; const d = new Date(v); if (Number.isNaN(d.getTime())) return "-"; return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }); }
+    function dateTimeText(v) { if (!v) return "-"; const d = new Date(v); if (Number.isNaN(d.getTime())) return "-"; return d.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\. /g, ".").replace(/\.$/, "") + " " + d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }); }
     function monthKey(v) { const d = new Date(v); if (Number.isNaN(d.getTime())) return ""; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
     function recordPad(n) { return String(n).padStart(2, "0"); }
     function recordKey(d) { return d.getFullYear() + "-" + recordPad(d.getMonth() + 1) + "-" + recordPad(d.getDate()); }
@@ -312,7 +329,7 @@
         const key = String(row.alert_id);
         const read = isRowRead(row);
         const cls = read ? "read-row" : row.alert_type === "danger" ? "danger-row" : row.alert_type === "warning" ? "warning-row" : "";
-        return `<tr class="${cls}"><td><input type="checkbox" class="alert-row-check" data-alert-id="${key}" ${selectedAlertIds.has(key) ? "checked" : ""} onchange="toggleAlertSelection('${key}', this.checked)"></td><td><span class="badge ${read ? "read" : row.alert_type}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${displayBinId(row)}</b></td><td>${row.bin_loc || "-"}</td><td>${messageFor(row.alert_type)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${timeOnly(row.alerted_at)}</td><td><span class="badge ${read ? "read" : "danger"}">${read ? "처리 완료" : "미처리"}</span></td><td>${read && rowReadAt(row) ? timeOnly(rowReadAt(row)) : "-"}</td><td><button class="row-trash-btn" type="button" onclick="deleteAlert('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
+        return `<tr class="${cls}"><td><input type="checkbox" class="alert-row-check" data-alert-id="${key}" ${selectedAlertIds.has(key) ? "checked" : ""} onchange="toggleAlertSelection('${key}', this.checked)"></td><td><span class="badge ${read ? "read" : row.alert_type}"><i class="ti ${typeIcon(row.alert_type)}"></i>${typeLabel(row.alert_type)}</span></td><td><b>#${displayBinId(row)}</b></td><td>${row.bin_loc || "-"}</td><td>${rowMessage(row)}</td><td>${parseTemp(row)}</td><td>${parseSmoke(row)}</td><td>${parseFlame(row)}</td><td>${dateTimeText(row.alerted_at)}</td><td><span class="badge ${read ? "read" : "danger"}">${read ? "처리 완료" : "미처리"}</span></td><td>${read && rowReadAt(row) ? dateTimeText(rowReadAt(row)) : "-"}</td><td><button class="row-trash-btn" type="button" onclick="deleteAlert('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
       }).join("");
       const end = Math.min(start + pageLimit, rows.length);
       $("pagerInfo").textContent = rows.length ? `총 ${rows.length}건 중 ${start + 1}-${end}건 표시` : "총 0건";
@@ -378,7 +395,7 @@
     function alertExportLines() {
       const rows = exportDateRows();
       const lines = [["유형","센서 ID","설치 위치","내용","온도","연기감지값","불꽃 감지","발생 시간","처리 상태","처리 시간"]];
-      rows.forEach((r) => lines.push([typeLabel(r.alert_type), `#${displayBinId(r)}`, r.bin_loc || "-", messageFor(r.alert_type), parseTemp(r), parseSmoke(r), parseFlame(r), timeOnly(r.alerted_at), isRowRead(r) ? "처리 완료" : "미처리", isRowRead(r) && rowReadAt(r) ? timeOnly(rowReadAt(r)) : "-"]));
+      rows.forEach((r) => lines.push([typeLabel(r.alert_type), `#${displayBinId(r)}`, r.bin_loc || "-", rowMessage(r), parseTemp(r), parseSmoke(r), parseFlame(r), dateTimeText(r.alerted_at), isRowRead(r) ? "처리 완료" : "미처리", isRowRead(r) && rowReadAt(r) ? dateTimeText(rowReadAt(r)) : "-"]));
       return lines;
     }
     function csvEscape(v) { return `"${String(v).replace(/"/g, '""')}"`; }
@@ -443,6 +460,12 @@
   <script src="/js/topbar-alert.js"></script>
 </body>
 </html>
+
+
+
+
+
+
 
 
 

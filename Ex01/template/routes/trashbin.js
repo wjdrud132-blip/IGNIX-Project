@@ -117,8 +117,26 @@ function queryAsync(sql, params = []) {
 }
 
 function alertMessageFor(row) {
-  if (row.alert_type === "danger") return "화재 위험 감지 - 즉각 대응 필요";
-  if (row.alert_type === "warning") return "온도 및 연기 임계값 초과";
+  const reason = String(row.ai_reason || row.alert_msg || "");
+
+  if (row.alert_type === "danger") {
+    if (reason.includes("불꽃")) return "불꽃 감지 및 센서값 상승 - 즉각 대응 필요";
+    if (reason.includes("연기") && reason.includes("온도")) return "온도·연기 위험 기준 초과 - 즉각 대응 필요";
+    if (reason.includes("연기")) return "연기 감지값 위험 기준 초과 - 즉각 대응 필요";
+    if (reason.includes("온도")) return "온도 위험 기준 초과 - 즉각 대응 필요";
+    return "화재 위험 감지 - 즉각 대응 필요";
+  }
+
+  if (row.alert_type === "warning") {
+    if (reason.includes("연기값 증가폭") || reason.includes("연기값이 학습 데이터")) return "연기값 증가폭 이상 감지";
+    if (reason.includes("온도 증가폭") || reason.includes("온도 증가폭이 학습 데이터")) return "온도 증가폭 이상 감지";
+    if (reason.includes("연기") && reason.includes("온도")) return "온도·연기 주의 기준 감지";
+    if (reason.includes("연기")) return "연기 감지값 주의 기준 초과";
+    if (reason.includes("온도")) return "온도 상승 주의 관찰";
+    if (reason.includes("햇빛") || reason.includes("주변 환경")) return "주변 환경 영향 가능성 - 주의 관찰";
+    return "주의 상태 감지 - 모니터링 필요";
+  }
+
   return "";
 }
 
@@ -328,6 +346,7 @@ async function saveRecentSensorAlerts(req, thresholds, aiEnabled, sensorModel) {
       alert_type: ai.status,
       ai_enabled: aiEnabled ? "Y" : "N",
       ai_status: ai.status,
+      ai_reason: ai.reason.join(" "),
       temp_value: ai.sensor.temp,
       smoke_value: ai.sensor.smoke,
       flame_value: ai.sensor.flame,
@@ -653,6 +672,7 @@ router.get("/sensor-history", (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
