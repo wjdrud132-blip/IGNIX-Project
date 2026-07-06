@@ -28,6 +28,7 @@ function isSensorOnline(sensorCreatedAt) {
 let cachedSensorModel = null;
 let cachedSensorModelAt = 0;
 const SENSOR_MODEL_CACHE_MS = 300000;
+const lastStatusByBin = new Map();
 
 function getSensorModel(thresholds, callback) {
   const now = Date.now();
@@ -337,12 +338,24 @@ async function saveRecentSensorAlerts(req, thresholds, aiEnabled, sensorModel) {
     LIMIT 1000
   `;
 
-  const recentRows = filterRowsByRegion(req, await queryAsync(recentSql), "bin_loc");
-  const judgedRows = recentRows.map((row) => {
-    const ruleStatus = row.fire_risk === 2 ? "danger" : row.fire_risk === 1 ? "warning" : "normal";
-    const ai = judgeDanger({ ...row, sensor_online: "Y", alert_type: ruleStatus, alert_msg: "" }, thresholds, aiEnabled, sensorModel);
+const recentRows = filterRowsByRegion(req, await queryAsync(recentSql), "bin_loc");
 
-    return {
+const judgedRows = recentRows.map((row) => {
+  const ruleStatus = row.fire_risk === 2 ? "danger" : row.fire_risk === 1 ? "warning" : "normal";
+
+  const prevStatus = lastStatusByBin.get(String(row.bin_id)) || "normal";
+
+  const ai = judgeDanger(
+    { ...row, sensor_online: "Y", alert_type: ruleStatus, alert_msg: "" },
+    thresholds,
+    aiEnabled,
+    sensorModel,
+    prevStatus
+  );
+
+  lastStatusByBin.set(String(row.bin_id), ai.status);
+
+  return {
       ...row,
       sensor_online: "Y",
       rule_status: ruleStatus,
@@ -402,32 +415,36 @@ router.get("/list", (req, res) => {
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
     LEFT JOIN (
-      SELECT
-        latest.*,
-        prev.temp AS prev_temp,
-        prev.gas AS prev_gas,
-        prev.ir_count AS prev_ir_count,
-        prev.created_at AS prev_created_at
-      FROM t_sensor latest
-      LEFT JOIN t_sensor prev
-        ON prev.sensor_id = (
-          SELECT p.sensor_id
-          FROM t_sensor p
-          WHERE p.bin_id = latest.bin_id
-            AND (
-              p.created_at < latest.created_at
-              OR (p.created_at = latest.created_at AND p.sensor_id < latest.sensor_id)
-            )
-          ORDER BY p.created_at DESC, p.sensor_id DESC
-          LIMIT 1
-        )
-      WHERE latest.sensor_id = (
-        SELECT s2.sensor_id
-        FROM t_sensor s2
-        WHERE s2.bin_id = latest.bin_id
-        ORDER BY s2.created_at DESC, s2.sensor_id DESC
-        LIMIT 1
-      )
+      SELECT *
+      FROM (
+        SELECT
+          sensor.*,
+          LAG(sensor.temp) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+          ) AS prev_temp,
+          LAG(sensor.gas) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+          ) AS prev_gas,
+          LAG(sensor.ir_count) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+          ) AS prev_ir_count,
+          LAG(sensor.created_at) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+          ) AS prev_created_at,
+          AVG(sensor.gas) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+          ) AS gas_avg3,
+          AVG(sensor.temp) OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
+            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+          ) AS temp_avg3,
+          ROW_NUMBER() OVER (
+            PARTITION BY sensor.bin_id ORDER BY sensor.created_at DESC, sensor.sensor_id DESC
+          ) AS rn
+        FROM t_sensor sensor
+      ) windowed
+      WHERE rn = 1
     ) s
       ON s.bin_id = b.bin_id
     LEFT JOIN t_alert a
@@ -475,7 +492,9 @@ router.get("/list", (req, res) => {
           const judgedRows = rows.map((row) => {
             const currentRow = rowForCurrentSensor(row);
             const ruleStatus = currentRow.alert_type;
-            const ai = judgeDanger(currentRow, thresholds, aiEnabled, sensorModel);
+            const prevStatus = lastStatusByBin.get(currentRow.bin_id) || "normal";
+            const ai = judgeDanger(currentRow, thresholds, aiEnabled, sensorModel, prevStatus);
+            //lastStatusByBin.set(currentRow.bin_id, ai.status);
             return {
               ...currentRow,
               display_bin_id: displayBinId(currentRow.bin_id),
