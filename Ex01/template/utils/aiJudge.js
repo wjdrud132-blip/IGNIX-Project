@@ -280,15 +280,25 @@ const adaptiveDangerTemp = Math.min(
   const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && model.tempChangeP90 > 0 && tempChange >= model.tempChangeP90;
   const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
   const TEMP_FIRE_CHANGE = 2;
+  const GAS_FIRE_CHANGE = 30;
+
 
   const tempChangeSmall =
     !isNumber(tempChange) || tempChange < TEMP_FIRE_CHANGE;
+    const gasRiseModerate =
+    gasChangeHigh &&
+    isNumber(gasChange) &&
+    gasChange < GAS_FIRE_CHANGE;
+
+  const smokeNotDanger =
+    !isNumber(smoke) || smoke < adaptiveDangerSmoke;
 
   const smokeOnlyWatch =
-    smokeWarningLike &&
-    gasChangeHigh &&
+    gasRiseModerate &&
     tempChangeSmall &&
+    smokeNotDanger &&
     flame !== 1;
+
 
   if (smokeOnlyWatch) {
     return {
