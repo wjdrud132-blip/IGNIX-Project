@@ -536,43 +536,41 @@
     padding: 80px 60px;
 }
 
-/* 2열 그리드 */
+/* 3열 카드 그리드 */
 .hw-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 48px;
-    align-items: center;
+    display: flex;
+    justify-content: center;
+    gap: 200px;
     margin-top: 48px;
 }
 
-/* 센서 목록 세로 배치 */
-.hw-sensors {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* 센서 카드 공통 */
+/* 센서 카드 = 원 전체 */
 .hw-sensor {
     display: flex;
-    gap: 16px;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
     background: #f8fafc;
     border: 1px solid #e8e9ed;
-    border-radius: 12px;
-    padding: 18px 20px;
+    padding: 36px;
+    flex-shrink: 0;
 }
 
 /* 센서 아이콘 */
 .hw-sensor-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 22px;
+    margin-bottom: 12px;
 }
 
 /* 센서 이름 */
@@ -580,23 +578,24 @@
     font-size: 14px;
     font-weight: 700;
     color: #1a1a2e;
-    margin-bottom: 3px;
+    margin-bottom: 8px;
+    line-height: 1.3;
 }
 
 /* 센서 설명 */
 .hw-sensor-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: #aaa;
+    line-height: 1.5;
+    margin-bottom: 12px;
 }
 
 /* 센서 배지 */
 .hw-sensor-badge {
-    margin-left: auto;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 99px;
-    flex-shrink: 0;
 }
 
 /* 배지 색상 */
@@ -604,59 +603,12 @@
 .hw-sensor-badge.red    { background: #FEE2E2; color: #dc2626; }
 .hw-sensor-badge.orange { background: #FEF3C7; color: #d97706; }
 
-/* 오른쪽 이미지 자리 */
-.hw-right {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 280px;
-    border: 2px dashed rgba(0, 0, 0, 0.1);
-    border-radius: 16px;
-    background: #f8fafc;
-}
-
-/* 이미지 플레이스홀더 */
-.hw-img-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    text-align: center;
-}
-
-/* 카메라 아이콘 */
-.hw-img-placeholder i {
-    font-size: 36px;
-    color: #ccc;
-}
-
-/* 이미지 제목 */
-.hw-img-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #bbb;
-}
-
-/* 이미지 설명 */
-.hw-img-desc {
-    font-size: 12px;
-    color: #ccc;
-    line-height: 1.7;
-}
-
-/* 태그 */
-.hw-img-tags {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
-}
-
-.hw-img-tags span {
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 99px;
-    background: #f0f0f0;
-    color: #aaa;
+/* 모바일 대응 */
+@media (max-width: 900px) {
+    .hw-grid {
+        flex-direction: column;
+        align-items: center;
+    }
 }
 
 /* ===============================
