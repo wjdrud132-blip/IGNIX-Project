@@ -435,25 +435,40 @@
     $("topbarOpenAllAlertsBtn").onclick = () => { location.href = "/alert"; };
     document.onclick = (e) => { if (!e.target.closest(".alert-area")) $("topbarAlertDropdown").classList.remove("open"); };
 
-    async function loadLogs() {
-      const res = await fetch("/alert/api/logs");
-      const json = await res.json();
-      alertRows = Array.isArray(json.rows) ? json.rows : Array.isArray(json) ? json : [];
-      selectedAlertIds.clear();
-      renderStats();
-      renderMonthChart();
-      renderTable();
-      renderTopbarAlerts();
+    async function loadDailyRecords() {
+  try {
+    const dailyRes = await fetch("/alerts/daily-records");
+    const dailyJson = await dailyRes.json();
 
-      try {
-        const dailyRes = await fetch("/alerts/daily-records");
-        const dailyJson = await dailyRes.json();
-        dailyRecordRows = Array.isArray(dailyJson) ? dailyJson : Array.isArray(dailyJson.rows) ? dailyJson.rows : [];
-      } catch (error) {
-        dailyRecordRows = [];
-      }
-      renderAlertDateRecords();
-    }
+    dailyRecordRows = Array.isArray(dailyJson)
+      ? dailyJson
+      : Array.isArray(dailyJson.rows)
+        ? dailyJson.rows
+        : [];
+  } catch (error) {
+    dailyRecordRows = [];
+  }
+
+  renderAlertDateRecords();
+}
+    
+    async function loadLogs() {
+  const res = await fetch("/alert/api/logs");
+  const json = await res.json();
+
+  alertRows = Array.isArray(json.rows) ? json.rows : Array.isArray(json) ? json : [];
+  selectedAlertIds.clear();
+
+  renderStats();
+  renderMonthChart();
+  renderTable();
+  renderTopbarAlerts();
+
+  // 날짜별 기록은 알림목록이 아니라 센서 기록 API에서 따로 불러옴
+  dailyRecordRows = [];
+  renderAlertDateRecords();
+  loadDailyRecords();
+}
     setNowText(); setInterval(setNowText, 1000); loadLogs();
   </script>
   <script src="/js/fire-alert.js"></script>

@@ -192,6 +192,8 @@ router.get("/list", async (req, res) => {
 
 router.get("/daily-records", async (req, res) => {
   try {
+    const scope = buildLocationWhere(req, "b.bin_loc");
+
     const sql = `
       SELECT
         s.sensor_id AS alert_id,
@@ -200,78 +202,47 @@ router.get("/daily-records", async (req, res) => {
         b.bin_loc,
         b.installed_at,
         b.network_status,
+
         s.sensor_id,
         s.temp AS temp_value,
         s.gas AS smoke_value,
         s.flame AS flame_value,
         s.fire_risk,
-        s.calc_temp_change AS temp_change,
-        s.calc_gas_change AS gas_change,
         s.created_at AS alerted_at,
         DATE_FORMAT(s.created_at, '%Y-%m-%d') AS record_date,
+
         CASE
           WHEN s.fire_risk = 2 THEN 'danger'
           WHEN s.fire_risk = 1 THEN 'warning'
           ELSE 'normal'
-        END AS saved_alert_type,
+        END AS alert_type,
+
         '' AS alert_msg,
         'N' AS is_received,
         NULL AS received_at
-      FROM (
-        SELECT
-          sensor_changes.*,
-          CASE
-            WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
-            ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-          END AS calc_temp_change,
-          CASE
-            WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
-            ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-          END AS calc_gas_change
-        FROM (
-          SELECT
-            s.*,
-            LAG(s.temp) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_temp,
-            LAG(s.gas) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_gas,
-            LAG(s.created_at) OVER (PARTITION BY s.bin_id ORDER BY s.created_at, s.sensor_id) AS prev_created_at
-          FROM t_sensor s
-          WHERE s.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-        ) sensor_changes
-      ) s
-      INNER JOIN t_trashbin b ON b.bin_id = s.bin_id
-      WHERE IFNULL(b.network_status, 1) <> 9
+      FROM t_sensor s
+      INNER JOIN t_trashbin b
+        ON b.bin_id = s.bin_id
+      WHERE s.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+        AND s.fire_risk IN (1, 2)
+        AND IFNULL(b.network_status, 1) <> 9
+        ${scope.clause}
       ORDER BY s.created_at DESC, s.sensor_id DESC
-      LIMIT 10000
+      LIMIT 3000
     `;
 
-    const thresholds = await getThresholds();
-    const aiEnabled = await getAiEnabled();
-    const sensorModel = aiEnabled ? await getSensorModel(thresholds) : null;
-    const scopedRows = filterRowsByRegion(req, await query(sql), "bin_loc").map((row) => {
-      const ai = judgeDanger({
-        ...row,
-        alert_type: row.saved_alert_type,
-        alert_msg: row.alert_msg || "",
-      }, thresholds, aiEnabled, sensorModel);
-
-      return {
-        ...row,
-        saved_alert_type: ai.status,
-        temp_value: ai.sensor.temp,
-        smoke_value: ai.sensor.smoke,
-        flame_value: ai.sensor.flame,
-        ai_enabled: aiEnabled ? "Y" : "N",
-      };
-    });
+    const rawRows = await query(sql, scope.params);
 
     const bestByBinDate = new Map();
     const severityRank = (type) => type === "danger" ? 1 : type === "warning" ? 2 : 3;
 
-    scopedRows.forEach((row) => {
+    rawRows.forEach((row) => {
       const key = `${row.bin_id}-${row.record_date}`;
       const old = bestByBinDate.get(key);
-      const rowRank = severityRank(row.saved_alert_type);
-      const oldRank = old ? severityRank(old.saved_alert_type) : 99;
+
+      const rowRank = severityRank(row.alert_type);
+      const oldRank = old ? severityRank(old.alert_type) : 99;
+
       if (!old || rowRank < oldRank || (rowRank === oldRank && new Date(row.alerted_at) > new Date(old.alerted_at))) {
         bestByBinDate.set(key, row);
       }
@@ -281,7 +252,6 @@ router.get("/daily-records", async (req, res) => {
       .sort((a, b) => new Date(b.alerted_at) - new Date(a.alerted_at) || Number(a.bin_id) - Number(b.bin_id))
       .map((row) => ({
         ...row,
-        alert_type: row.saved_alert_type,
         display_bin_id: displayBinId(row.bin_id),
       }));
 

@@ -121,12 +121,27 @@ async function deleteSelected(req, alertIds) {
 
   const scope = buildLocationWhere(req, "b.bin_loc");
   const placeholders = ids.map(() => "?").join(",");
+
   const sql = `
     DELETE a
     FROM t_alert a
-    LEFT JOIN t_trashbin b ON a.bin_id = b.bin_id
-    WHERE a.alert_id IN (${placeholders})
-      ${scope.clause}
+    INNER JOIN (
+      SELECT *
+      FROM (
+        SELECT DISTINCT
+          a0.bin_id,
+          a0.alert_type,
+          a0.alerted_at
+        FROM t_alert a0
+        LEFT JOIN t_trashbin b
+          ON a0.bin_id = b.bin_id
+        WHERE a0.alert_id IN (${placeholders})
+          ${scope.clause}
+      ) target_rows
+    ) target
+      ON target.bin_id = a.bin_id
+      AND target.alert_type = a.alert_type
+      AND target.alerted_at = a.alerted_at
   `;
 
   return await query(sql, [...ids, ...scope.params]);

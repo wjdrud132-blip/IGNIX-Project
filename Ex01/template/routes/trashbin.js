@@ -47,11 +47,11 @@ function getSensorModel(thresholds, callback) {
       CASE
         WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
         ELSE GREATEST(temp - prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-      END AS temp_change,
+      END AS temp_rise_per_min,
       CASE
         WHEN prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 0 THEN NULL
         ELSE GREATEST(gas - prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, prev_created_at, created_at) / 60, 1)
-      END AS gas_change
+      END AS gas_rise_per_min
     FROM (
       SELECT
         s.*,
@@ -314,11 +314,11 @@ async function saveRecentSensorAlerts(req, thresholds, aiEnabled, sensorModel) {
       CASE
         WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
         ELSE GREATEST(s.temp - s.prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
-      END AS temp_change,
+      END AS temp_rise_per_min,
       CASE
         WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
         ELSE GREATEST(s.gas - s.prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
-      END AS gas_change
+      END AS gas_rise_per_min
     FROM t_trashbin b
     INNER JOIN (
       SELECT
@@ -399,54 +399,48 @@ router.get("/list", (req, res) => {
       s.ir_count,
       s.fire_risk,
       s.created_at AS sensor_created_at,
-      s.prev_temp,
-      s.prev_gas,
-      s.prev_ir_count,
-      s.prev_created_at,
+
+      p.temp AS prev_temp,
+      p.gas AS prev_gas,
+      p.ir_count AS prev_ir_count,
+      p.created_at AS prev_created_at,
+
       CASE
-        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
-        ELSE GREATEST(s.temp - s.prev_temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
-      END AS temp_change,
+        WHEN p.created_at IS NULL OR TIMESTAMPDIFF(SECOND, p.created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.temp - p.temp, 0) / GREATEST(TIMESTAMPDIFF(SECOND, p.created_at, s.created_at) / 60, 1)
+      END AS temp_rise_per_min,
+
       CASE
-        WHEN s.prev_created_at IS NULL OR TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) <= 0 THEN NULL
-        ELSE GREATEST(s.gas - s.prev_gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, s.prev_created_at, s.created_at) / 60, 1)
-      END AS gas_change
+        WHEN p.created_at IS NULL OR TIMESTAMPDIFF(SECOND, p.created_at, s.created_at) <= 0 THEN NULL
+        ELSE GREATEST(s.gas - p.gas, 0) / GREATEST(TIMESTAMPDIFF(SECOND, p.created_at, s.created_at) / 60, 1)
+      END AS gas_rise_per_min
+
     FROM t_trashbin b
     LEFT JOIN t_manager m
       ON b.mgr_id = m.mgr_id
-    LEFT JOIN (
-      SELECT *
-      FROM (
-        SELECT
-          sensor.*,
-          LAG(sensor.temp) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-          ) AS prev_temp,
-          LAG(sensor.gas) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-          ) AS prev_gas,
-          LAG(sensor.ir_count) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-          ) AS prev_ir_count,
-          LAG(sensor.created_at) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-          ) AS prev_created_at,
-          AVG(sensor.gas) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-          ) AS gas_avg3,
-          AVG(sensor.temp) OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at, sensor.sensor_id
-            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-          ) AS temp_avg3,
-          ROW_NUMBER() OVER (
-            PARTITION BY sensor.bin_id ORDER BY sensor.created_at DESC, sensor.sensor_id DESC
-          ) AS rn
-        FROM t_sensor sensor
-      ) windowed
-      WHERE rn = 1
-    ) s
-      ON s.bin_id = b.bin_id
+
+    LEFT JOIN t_sensor s
+      ON s.sensor_id = (
+        SELECT latest.sensor_id
+        FROM t_sensor latest
+        WHERE latest.bin_id = b.bin_id
+        ORDER BY latest.created_at DESC, latest.sensor_id DESC
+        LIMIT 1
+      )
+
+    LEFT JOIN t_sensor p
+      ON p.sensor_id = (
+        SELECT prev.sensor_id
+        FROM t_sensor prev
+        WHERE prev.bin_id = b.bin_id
+          AND s.sensor_id IS NOT NULL
+          AND (
+            prev.created_at < s.created_at
+            OR (prev.created_at = s.created_at AND prev.sensor_id < s.sensor_id)
+          )
+        ORDER BY prev.created_at DESC, prev.sensor_id DESC
+        LIMIT 1
+      )
     LEFT JOIN t_alert a
       ON a.alert_id = (
         SELECT a2.alert_id
