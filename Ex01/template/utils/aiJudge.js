@@ -279,6 +279,26 @@ const adaptiveDangerTemp = Math.min(
   const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && model.gasChangeP90 > 0 && gasChange >= model.gasChangeP90;
   const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && model.tempChangeP90 > 0 && tempChange >= model.tempChangeP90;
   const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
+  const TEMP_FIRE_CHANGE = 2;
+
+  const tempChangeSmall =
+    !isNumber(tempChange) || tempChange < TEMP_FIRE_CHANGE;
+
+  const smokeOnlyWatch =
+    smokeWarningLike &&
+    gasChangeHigh &&
+    tempChangeSmall &&
+    flame !== 1;
+
+  if (smokeOnlyWatch) {
+    return {
+      status: "normal",
+      reason: [
+        "연기값은 증가했지만 온도 상승 변화량이 크지 않아 담배연기 또는 일시적 연기 가능성으로 관찰합니다."
+      ],
+      confidence: 55,
+    };
+  }
   const ir = irContext(sensor);
 
   const flameIsUseful = flame === 1 && !ir.sunlightLike && (
