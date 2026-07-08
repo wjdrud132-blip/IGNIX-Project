@@ -276,19 +276,32 @@ const adaptiveDangerTemp = Math.min(
   const flame = sensor.flame;
   const gasChange = firstNumber(row.gas_change, row.smoke_change, 0);
   const tempChange = firstNumber(row.temp_change, 0);
-  const gasChangeHigh = isNumber(gasChange) && isNumber(model.gasChangeP90) && model.gasChangeP90 > 0 && gasChange >= model.gasChangeP90;
-  const tempChangeHigh = isNumber(tempChange) && isNumber(model.tempChangeP90) && model.tempChangeP90 > 0 && tempChange >= model.tempChangeP90;
-  const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
-  const TEMP_FIRE_CHANGE = 2;
-  const GAS_FIRE_CHANGE = 30;
 
+  const GAS_CHANGE_FLOOR = 25;
+  const TEMP_FIRE_CHANGE = 2;
+
+  const modelGasChangeP90 = isNumber(model.gasChangeP90) ? model.gasChangeP90 : 0;
+  const effectiveGasChangeP90 = Math.max(modelGasChangeP90, GAS_CHANGE_FLOOR);
+
+  const gasChangeHigh =
+    isNumber(gasChange) &&
+    gasChange >= effectiveGasChangeP90;
+
+  const tempChangeHigh =
+    isNumber(tempChange) &&
+    isNumber(model.tempChangeP90) &&
+    model.tempChangeP90 > 0 &&
+    tempChange >= model.tempChangeP90;
+
+  const smokeWarningLike = isNumber(smoke) && smoke >= adaptiveWarningSmoke;
 
   const tempChangeSmall =
     !isNumber(tempChange) || tempChange < TEMP_FIRE_CHANGE;
-    const gasRiseModerate =
-    gasChangeHigh &&
+
+  const gasRiseModerate =
     isNumber(gasChange) &&
-    gasChange < GAS_FIRE_CHANGE;
+    gasChange > 0 &&
+    gasChange < GAS_CHANGE_FLOOR;
 
   const smokeNotDanger =
     !isNumber(smoke) || smoke < adaptiveDangerSmoke;
